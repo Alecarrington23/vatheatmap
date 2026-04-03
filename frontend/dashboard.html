@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard — VATSIM HeatTracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<style>
+  :root {
+    --bg:       #040d0f;
+    --surface:  #071418;
+    --surface2: #0a1e26;
+    --border:   #0d3040;
+    --green:    #00ffa3;
+    --green-dim:#00ffa320;
+    --amber:    #ffb700;
+    --blue:     #00c8ff;
+    --red:      #ff4d6d;
+    --discord:  #5865F2;
+    --text:     #c8dde4;
+    --muted:    #4a6875;
+    --mono:     'Share Tech Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0; z-index: 100;
+  }
+  .logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900; font-size: 1.25rem; letter-spacing: 0.05em;
+    color: var(--green); text-decoration: none;
+  }
+  .logo span { color: var(--text); font-weight: 300; }
+
+  .topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+
+  .identity {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text);
+  }
+  .discord-tag {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    background: rgba(88,101,242,0.15); border: 1px solid rgba(88,101,242,0.35);
+    color: #8b97ff; padding: 0.22rem 0.6rem;
+  }
+  .vatsim-tag {
+    background: var(--green-dim); border: 1px solid var(--green);
+    color: var(--green); padding: 0.22rem 0.6rem;
+    font-family: var(--mono); font-size: 0.7rem;
+    display: inline-flex; align-items: center; gap: 0.3rem;
+  }
+
+  .btn-sm {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.35rem 0.85rem; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer; text-decoration: none;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-sm:hover { border-color: var(--text); color: var(--text); }
+  .btn-sm.danger:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid; grid-template-columns: 310px 1fr;
+    flex: 1; overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .sidebar-section { border-bottom: 1px solid var(--border); padding: 1.1rem 1.25rem; }
+  .section-label {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.9rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* Live card */
+  .live-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 1rem; position: relative; overflow: hidden;
+  }
+  .live-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background: var(--green);
+  }
+  .live-badge {
+    display:inline-flex; align-items:center; gap:0.4rem;
+    font-family:var(--mono); font-size:0.62rem; color:var(--green); margin-bottom:0.7rem;
+  }
+  .pulse {
+    width:6px; height:6px; border-radius:50%; background:var(--green);
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%{box-shadow:0 0 0 0 rgba(0,255,163,.5)}
+    70%{box-shadow:0 0 0 8px rgba(0,255,163,0)}
+    100%{box-shadow:0 0 0 0 rgba(0,255,163,0)}
+  }
+  .callsign {
+    font-family:'Barlow Condensed',sans-serif; font-weight:900; font-size:1.8rem;
+    letter-spacing:0.05em; color:#fff; line-height:1; margin-bottom:0.5rem;
+  }
+  .route-line {
+    font-family:var(--mono); font-size:0.78rem; color:var(--blue);
+    display:flex; align-items:center; gap:0.4rem; margin-bottom:0.7rem;
+  }
+  .route-line .arrow { color:var(--muted); }
+  .telemetry { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; }
+  .telem-label { font-family:var(--mono); font-size:0.58rem; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase; display:block; }
+  .telem-value { font-family:var(--mono); font-size:0.9rem; color:var(--text); }
+  .telem-value.hi { color:var(--amber); }
+  .offline-state { text-align:center; padding:1.25rem 0; color:var(--muted); font-family:var(--mono); font-size:0.78rem; }
+  .offline-state .ico { font-size:1.8rem; display:block; margin-bottom:0.4rem; opacity:0.4; }
+
+  /* Stats */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.65rem; }
+  .stat-box { background:var(--surface2); border:1px solid var(--border); padding:0.7rem; }
+  .stat-num { font-family:'Barlow Condensed',sans-serif; font-weight:900; font-size:1.6rem; color:var(--green); line-height:1; }
+  .stat-label { font-family:var(--mono); font-size:0.58rem; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase; margin-top:0.15rem; }
+
+  /* Routes */
+  .route-item {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:0.45rem 0; border-bottom:1px solid var(--border);
+    font-family:var(--mono); font-size:0.72rem;
+  }
+  .route-item:last-child { border-bottom:none; }
+  .route-airports { color:var(--blue); }
+  .route-count { background:var(--green-dim); border:1px solid var(--green); color:var(--green); padding:0.08rem 0.4rem; font-size:0.62rem; }
+
+  /* Flights */
+  .flight-item { padding:0.65rem 0; border-bottom:1px solid var(--border); }
+  .flight-item:last-child { border-bottom:none; }
+  .flight-cs { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:0.95rem; color:#fff; }
+  .flight-meta { font-family:var(--mono); font-size:0.62rem; color:var(--muted); margin-top:0.15rem; }
+
+  /* Sidebar footer */
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.65rem; color: var(--muted);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .sidebar-footer a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+  .sidebar-footer a:hover { color: var(--green); }
+
+  /* ── Map ── */
+  .map-area { position:relative; display:flex; flex-direction:column; }
+  .map-toolbar {
+    display:flex; align-items:center; gap:0.5rem; padding:0.55rem 1rem;
+    background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .map-btn {
+    font-family:var(--mono); font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase;
+    padding:0.32rem 0.75rem; border:1px solid var(--border);
+    background:transparent; color:var(--muted); cursor:pointer; transition:all .2s;
+  }
+  .map-btn.active, .map-btn:hover { border-color:var(--green); color:var(--green); background:var(--green-dim); }
+  .map-spacer { flex:1; }
+  .refresh-indicator { font-family:var(--mono); font-size:0.62rem; color:var(--muted); }
+  #refreshCountdown { color:var(--amber); }
+
+  #map { flex:1; }
+  .leaflet-tile { filter:invert(1) hue-rotate(180deg) saturate(1.2) brightness(0.8); }
+  .leaflet-container { background:#040d0f; }
+
+  .plane-marker { width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:20px; filter:drop-shadow(0 0 6px rgba(0,255,163,.8)); }
+
+  .loading-overlay {
+    position:absolute; inset:0; background:rgba(4,13,15,.85);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:500; font-family:var(--mono);
+  }
+  .loading-spinner { width:44px; height:44px; border:2px solid var(--border); border-top-color:var(--green); border-radius:50%; animation:spin .8s linear infinite; margin-bottom:1rem; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { color:var(--green); font-size:0.75rem; letter-spacing:0.15em; }
+
+  #authGuard {
+    position:fixed; inset:0; z-index:999; background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); color:var(--muted); font-size:0.8rem;
+  }
+</style>
+</head>
+<body>
+
+<div id="authGuard">
+  <div style="text-align:center">
+    <div style="font-size:2rem;margin-bottom:1rem;opacity:.4">🔒</div>
+    Checking authentication...
+  </div>
+</div>
+
+<div class="topbar">
+  <a class="logo" href="/">HEAT<span>TRACKER</span></a>
+  <div class="topbar-right">
+    <div class="identity">
+      <span class="discord-tag">
+        <svg width="12" height="12" viewBox="0 0 127.14 96.36" fill="currentColor">
+          <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+        </svg>
+        <span id="discordName">—</span>
+      </span>
+      <span class="vatsim-tag">CID: <span id="vatsimCid">—</span></span>
+    </div>
+    <button class="btn-sm danger" onclick="unlinkVatsim()" title="Unlink VATSIM CID">Unlink</button>
+    <a href="/auth/logout" class="btn-sm">Sign Out</a>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-label">Live Flight</div>
+      <div id="liveCard" class="offline-state">
+        <span class="ico">✈</span>Not currently flying on VATSIM
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Statistics</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-num" id="statPoints">—</div>
+          <div class="stat-label">Tracked Points</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="statFlights">—</div>
+          <div class="stat-label">Total Flights</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Top Routes</div>
+      <div id="topRoutes">
+        <div style="font-family:var(--mono);font-size:.72rem;color:var(--muted);text-align:center;padding:.9rem 0">No routes yet</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Recent Flights</div>
+      <div id="recentFlights">
+        <div style="font-family:var(--mono);font-size:.72rem;color:var(--muted);text-align:center;padding:.9rem 0">No flights recorded</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <span>VATSIM HeatTracker</span>
+      <a href="https://anord.cc/legal" target="_blank" rel="noopener">Privacy &amp; Data</a>
+    </div>
+
+  </aside>
+
+  <div class="map-area">
+    <div class="map-toolbar">
+      <button class="map-btn active" id="btnHeat" onclick="setMode('heat')">Heatmap</button>
+      <button class="map-btn" id="btnLive" onclick="setMode('live')">Live Position</button>
+      <div class="map-spacer"></div>
+      <div class="refresh-indicator">Next update in <span id="refreshCountdown">60</span>s</div>
+    </div>
+    <div id="map"></div>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">LOADING FLIGHT DATA</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let map, heatLayer, planeMarker;
+let currentMode = 'heat';
+let liveData = null;
+let countdown = 60, countdownTimer;
+
+function initMap() {
+  map = L.map('map', {center:[30,15], zoom:3, zoomControl:true, attributionControl:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18}).addTo(map);
+  heatLayer = L.heatLayer([], {
+    radius:22, blur:18, maxZoom:10,
+    gradient:{0:'#00c8ff', 0.4:'#00ffa3', 0.7:'#ffb700', 1:'#ff4d6d'},
+    max:5,
+  }).addTo(map);
+}
+
+async function checkAuth() {
+  const r = await fetch('/api/me', {credentials:'include'});
+  if (!r.ok) { window.location.href='/'; return false; }
+  const d = await r.json();
+  if (!d.authenticated) { window.location.href='/'; return false; }
+  if (!d.vatsim_id) { window.location.href='/link-vatsim'; return false; }
+
+  document.getElementById('discordName').textContent = d.discord_name || d.discord_id;
+  document.getElementById('vatsimCid').textContent   = d.vatsim_id;
+  document.getElementById('authGuard').style.display  = 'none';
+  return true;
+}
+
+async function loadHeatmap() {
+  const r = await fetch('/api/heatmap', {credentials:'include'});
+  if (!r.ok) return;
+  const data = await r.json();
+  const pts = (data.points||[]).map(p=>[p.lat,p.lng,p.weight]);
+  heatLayer.setLatLngs(pts);
+  if (pts.length>0 && currentMode==='heat') {
+    const lats=pts.map(p=>p[0]), lngs=pts.map(p=>p[1]);
+    map.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]],{padding:[40,40]});
+  }
+}
+
+async function loadLive() {
+  const r = await fetch('/api/live', {credentials:'include'});
+  if (!r.ok) return;
+  liveData = await r.json();
+
+  if (liveData.online) {
+    document.getElementById('liveCard').innerHTML = `
+      <div class="live-badge"><div class="pulse"></div> ONLINE NOW</div>
+      <div class="callsign">${liveData.callsign}</div>
+      <div class="route-line">
+        <span>${liveData.dep||'???'}</span><span class="arrow">──✈──</span><span>${liveData.arr||'???'}</span>
+      </div>
+      <div class="telemetry">
+        <div><span class="telem-label">Altitude</span><span class="telem-value hi">${(liveData.altitude||0).toLocaleString()} ft</span></div>
+        <div><span class="telem-label">Groundspeed</span><span class="telem-value hi">${liveData.groundspeed||0} kts</span></div>
+        <div><span class="telem-label">Heading</span><span class="telem-value">${liveData.heading||0}°</span></div>
+        <div><span class="telem-label">Aircraft</span><span class="telem-value">${liveData.aircraft||'—'}</span></div>
+      </div>
+    `;
+    const icon = L.divIcon({
+      className:'',
+      html:`<div class="plane-marker" style="transform:rotate(${liveData.heading||0}deg)">✈</div>`,
+      iconSize:[32,32], iconAnchor:[16,16],
+    });
+    if (!planeMarker) {
+      planeMarker = L.marker([liveData.lat,liveData.lng],{icon}).addTo(map);
+    } else {
+      planeMarker.setLatLng([liveData.lat,liveData.lng]);
+      planeMarker.setIcon(icon);
+    }
+    if (currentMode==='live') map.setView([liveData.lat,liveData.lng],7);
+  } else {
+    document.getElementById('liveCard').innerHTML = `
+      <div class="offline-state"><span class="ico">✈</span>Not currently flying on VATSIM</div>
+    `;
+    if (planeMarker) { map.removeLayer(planeMarker); planeMarker=null; }
+  }
+}
+
+async function loadStats() {
+  const r = await fetch('/api/stats', {credentials:'include'});
+  if (!r.ok) return;
+  const data = await r.json();
+  document.getElementById('statPoints').textContent  = (data.total_points||0).toLocaleString();
+  document.getElementById('statFlights').textContent = (data.total_flights||0).toLocaleString();
+  if (data.top_routes && data.top_routes.length) {
+    document.getElementById('topRoutes').innerHTML = data.top_routes.map(r=>`
+      <div class="route-item">
+        <span class="route-airports">${r.dep} → ${r.arr}</span>
+        <span class="route-count">${r.times}×</span>
+      </div>
+    `).join('');
+  }
+}
+
+async function loadFlights() {
+  const r = await fetch('/api/flights', {credentials:'include'});
+  if (!r.ok) return;
+  const data = await r.json();
+  if (data.flights && data.flights.length) {
+    document.getElementById('recentFlights').innerHTML = data.flights.slice(0,8).map(f=>`
+      <div class="flight-item">
+        <div class="flight-cs">${f.callsign||'—'}</div>
+        <div class="flight-meta">${f.dep||'???'} → ${f.arr||'???'} · ${f.aircraft||'—'}</div>
+        <div class="flight-meta" style="font-size:.58rem;margin-top:.1rem">${formatDate(f.started_at)}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function formatDate(dt) {
+  if (!dt) return '—';
+  return new Date(dt+'Z').toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btnHeat').classList.toggle('active', mode==='heat');
+  document.getElementById('btnLive').classList.toggle('active', mode==='live');
+  if (mode==='heat') {
+    heatLayer.addTo(map);
+  } else {
+    if (liveData && liveData.online) {
+      if (planeMarker) planeMarker.addTo(map);
+      map.setView([liveData.lat, liveData.lng], 7);
+    } else {
+      alert('You are not currently flying on VATSIM.');
+      setMode('heat');
+    }
+  }
+}
+
+async function unlinkVatsim() {
+  if (!confirm('Unlink your VATSIM CID? You will need to re-link before using the tracker again.')) return;
+  await fetch('/api/unlink-vatsim', {method:'POST', credentials:'include'});
+  window.location.href = '/link-vatsim';
+}
+
+function startCountdown() {
+  clearInterval(countdownTimer);
+  countdown = 60;
+  countdownTimer = setInterval(() => {
+    countdown--;
+    document.getElementById('refreshCountdown').textContent = countdown;
+    if (countdown <= 0) { refreshAll(); countdown = 60; }
+  }, 1000);
+}
+
+async function refreshAll() {
+  await Promise.all([loadLive(), loadHeatmap(), loadStats(), loadFlights()]);
+}
+
+(async () => {
+  initMap();
+  const ok = await checkAuth();
+  if (!ok) return;
+  await refreshAll();
+  document.getElementById('loadingOverlay').style.display = 'none';
+  startCountdown();
+})();
+</script>
+</body>
+</html>

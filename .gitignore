@@ -1,0 +1,9 @@
+# Exclude environment variables
+.env
+# Exclude the SQLite database
+flights.db
+
+# Optional: Exclude any temporary WAL (Write-Ahead Logging) files SQLite creates
+flights.db-journal
+flights.db-shm
+flights.db-wal

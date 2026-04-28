@@ -1,0 +1,8 @@
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\bin\x64\Release\MsfsHeatBridge.exe
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\bin\x64\Release\MsfsHeatBridge.pdb
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\bin\x64\Release\Microsoft.FlightSimulator.SimConnect.dll
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\obj\x64\Release\MsfsHeatBridge.csproj.AssemblyReference.cache
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\obj\x64\Release\MsfsHeatBridge.csproj.CoreCompileInputs.cache
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\obj\x64\Release\MsfsHeat.8C963D77.Up2Date
+C:\Users\Alex\vatsim-heatmap\SimpleSimConnector\SimpleSimConnector.exe
+C:\Users\Alex\vatsim-heatmap\MsfsHeatBridge\obj\x64\Release\SimpleSimConnector.exe

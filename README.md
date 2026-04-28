@@ -1,6 +1,6 @@
-# VATSIM HeatTracker
+# SimConnect HeatTracker
 
-Track a linked VATSIM CID, store flown routes over time, and view them in a wrapped flat map or globe view.
+Track your flights, store flown routes over time, and view them in a wrapped flat map or globe view.
 
 ## What It Actually Uses
 
@@ -8,18 +8,18 @@ Authentication is handled by:
 - Discord OAuth
 - Passkeys (WebAuthn), after a user has signed in once and enrolled one
 
-VATSIM is used for:
-- linking the CID you want to track
+SimpelSimConnect is used for:
 - reading live public pilot data from the VATSIM data feed
 
-So the app does **not** use VATSIM OAuth for login. It uses Discord/passkeys for account access, then links a VATSIM CID to that account.
+VATSIM API will be added again:
+- Coming sson
 
 ## Features
 
 - Discord OAuth sign-in
 - Optional passkey sign-in after enrollment
 - VATSIM CID linking
-- Live VATSIM flight tracking
+- Live SimConnect flight tracking
 - Historical route map and density map
 - Wrapped flat-map rendering for long-haul routes
 - Globe view

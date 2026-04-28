@@ -16,3 +16,7 @@ backend/import_star_alliance_data.py
 # Python
 backend/__pycache__/
 *.pyc
+
+# Simconnect
+src/SimpleSimConnector
+backend/app-backup.py

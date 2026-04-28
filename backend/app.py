@@ -16,6 +16,9 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, send_from_directory, session
 from flask_cors import CORS
 
+SimConnect = None
+AircraftRequests = None
+
 base64url_to_bytes: Any = None
 generate_authentication_options: Any = None
 generate_registration_options: Any = None
@@ -45,50 +48,382 @@ try:
 except ImportError:
     WEBAUTHN_AVAILABLE = False
 
+try:
+    simconnect_module = importlib.import_module("SimConnect")
+    SimConnect = simconnect_module.SimConnect
+    AircraftRequests = simconnect_module.AircraftRequests
+    SIMCONNECT_AVAILABLE = True
+except ImportError:
+    SIMCONNECT_AVAILABLE = False
+
 load_dotenv()
 
 app = Flask(__name__, static_folder="../frontend/static", template_folder="../frontend/templates")
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 CORS(app, supports_credentials=True)
 
-# ── Discord OAuth Config ──────────────────────────────────────────────────────
-DISCORD_AUTH_URL      = "https://discord.com/oauth2/authorize"
-DISCORD_TOKEN_URL     = "https://discord.com/api/oauth2/token"
-DISCORD_USER_URL      = "https://discord.com/api/users/@me"
-DISCORD_CLIENT_ID     = os.environ.get("DISCORD_CLIENT_ID")
+# Discord OAuth config
+DISCORD_AUTH_URL = "https://discord.com/oauth2/authorize"
+DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
+DISCORD_USER_URL = "https://discord.com/api/users/@me"
+DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_URI  = os.environ.get("DISCORD_REDIRECT_URI")
+DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI")
 
-# ── Allowlist — only these Discord user IDs may log in ───────────────────────
+# Allowlist: only these Discord user IDs may log in
 ALLOWED_DISCORD_IDS = {
     discord_id.strip()
     for discord_id in (os.environ.get("ALLOWED_DISCORD_IDS") or "").split(",")
     if discord_id.strip()
 }
 
-# ── VATSIM public data feed ───────────────────────────────────────────────────
-VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json"
-_vatsim_cache   = {"data": None, "fetched_at": 0}
-VATSIM_CACHE_TTL_SECONDS = max(5, int(os.environ.get("VATSIM_CACHE_TTL_SECONDS", "15")))
+# Tracker config
 TRACKER_POLL_SECONDS = max(10, int(os.environ.get("TRACKER_POLL_SECONDS", "20")))
 TRACKER_MIN_INSERT_SECONDS = max(5, int(os.environ.get("TRACKER_MIN_INSERT_SECONDS", "10")))
+
+SIMCONNECT_CALLSIGN = (os.environ.get("SIMCONNECT_CALLSIGN") or "SIMCONNECT").strip() or "SIMCONNECT"
+SIMCONNECT_DEP = (os.environ.get("SIMCONNECT_DEP") or "").strip().upper()
+SIMCONNECT_ARR = (os.environ.get("SIMCONNECT_ARR") or "").strip().upper()
+SIMCONNECT_AIRCRAFT = (os.environ.get("SIMCONNECT_AIRCRAFT") or "").strip()
+
+SIMCONNECT_STATE_PATH = os.environ.get(
+    "SIMCONNECT_STATE_PATH",
+    os.path.join(os.path.dirname(__file__), "simconnect-state.json"),
+)
+
+SIMCONNECT_STALE_SECONDS = max(5, int(os.environ.get("SIMCONNECT_STALE_SECONDS", "30")))
+SIMCONNECT_TELEMETRY_TOKEN = (os.environ.get("SIMCONNECT_TELEMETRY_TOKEN") or "").strip()
+
+LOCAL_TRACKER_PREFIX = "LOCAL-"
+
 SIMBRIEF_API_URL = "https://www.simbrief.com/api/xml.fetcher.php"
 SIMBRIEF_USERID = (os.environ.get("SIMBRIEF_USERID") or "").strip()
 SIMBRIEF_USERNAME = (os.environ.get("SIMBRIEF_USERNAME") or "").strip()
 SIMBRIEF_CACHE_TTL_SECONDS = max(30, int(os.environ.get("SIMBRIEF_CACHE_TTL_SECONDS", "300")))
-_simbrief_cache = {"data": None, "fetched_at": 0, "identity": None}
+_simbrief_cache: dict[str, Any] = {"data": None, "fetched_at": 0, "identity": None}
+
 MAX_SEGMENT_GAP_SECONDS = 60 * 60 * 4
 MAX_SEGMENT_DISTANCE_KM = 900
+
 PASSKEY_RP_NAME = os.environ.get("PASSKEY_RP_NAME", "VATSIM HeatTracker")
+
 _tracker_thread = None
 _tracker_lock = threading.Lock()
+
+
+def utc_now_iso8601() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def safe_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    if value is None:
+        return default
+
+    if isinstance(value, (int, float)):
+        return bool(value)
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "online", "connected"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "offline", "disconnected"}:
+            return False
+
+    return default
+
+
+def parse_finite_float(value: Any, field_name: str) -> float:
+    if value is None or value == "":
+        raise ValueError(f"missing_{field_name}")
+
+    if isinstance(value, bool):
+        raise ValueError(f"invalid_{field_name}")
+
+    if not isinstance(value, (int, float, str)):
+        raise ValueError(f"invalid_{field_name}")
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"invalid_{field_name}")
+
+    if not math.isfinite(number):
+        raise ValueError(f"invalid_{field_name}")
+
+    return number
+
+
+def safe_float(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    required: bool = False,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
+    value: Any = payload.get(key)
+
+    if value is None or value == "":
+        if required:
+            raise ValueError(f"missing_{key}")
+        return None
+
+    number = parse_finite_float(value, key)
+
+    if minimum is not None and number < minimum:
+        raise ValueError(f"{key}_below_minimum")
+
+    if maximum is not None and number > maximum:
+        raise ValueError(f"{key}_above_maximum")
+
+    return number
+
+
+def safe_text(value: Any, fallback: str = "") -> str:
+    if value is None:
+        return fallback
+
+    text = str(value).strip()
+    return text if text else fallback
+
+
+def normalize_telemetry_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_json_body")
+
+    online = safe_bool(payload.get("online"), default=True)
+    connected = safe_bool(payload.get("connected"), default=online)
+
+    latitude = safe_float(
+        payload,
+        "latitude",
+        required=online,
+        minimum=-90.0,
+        maximum=90.0,
+    )
+    longitude = safe_float(
+        payload,
+        "longitude",
+        required=online,
+        minimum=-180.0,
+        maximum=180.0,
+    )
+
+    altitude = safe_float(payload, "altitude", required=False)
+    groundspeed = safe_float(payload, "groundspeed", required=False)
+    heading = safe_float(payload, "heading", required=False)
+
+    if heading is not None:
+        heading = heading % 360.0
+
+    flight_plan_raw: Any = payload.get("flight_plan")
+    flight_plan: dict[str, Any] = flight_plan_raw if isinstance(flight_plan_raw, dict) else {}
+
+    departure = safe_text(flight_plan.get("departure"), SIMCONNECT_DEP).upper()
+    arrival = safe_text(flight_plan.get("arrival"), SIMCONNECT_ARR).upper()
+    aircraft_short = safe_text(
+        flight_plan.get("aircraft_short") or flight_plan.get("aircraft"),
+        SIMCONNECT_AIRCRAFT,
+    ).upper()
+
+    callsign = safe_text(payload.get("callsign"), SIMCONNECT_CALLSIGN)
+    source = safe_text(payload.get("source"), "simconnect-bridge")
+    last_error = payload.get("last_error")
+    now_unix = int(time.time())
+
+    return {
+        "online": online,
+        "connected": connected,
+        "latitude": latitude,
+        "longitude": longitude,
+        "altitude": int(round(altitude)) if altitude is not None else None,
+        "groundspeed": int(round(groundspeed)) if groundspeed is not None else None,
+        "heading": heading,
+        "callsign": callsign,
+        "flight_plan": {
+            "departure": departure,
+            "arrival": arrival,
+            "aircraft_short": aircraft_short,
+        },
+        "source": source,
+        "last_error": last_error,
+        "received_at": utc_now_iso8601(),
+        "received_at_unix": now_unix,
+        "updated_at": now_unix,
+    }
+
+
+def is_telemetry_request_authorized() -> bool:
+    if SIMCONNECT_TELEMETRY_TOKEN:
+        auth_header = request.headers.get("Authorization", "")
+        bearer_token = ""
+
+        if auth_header.lower().startswith("bearer "):
+            bearer_token = auth_header.split(" ", 1)[1].strip()
+
+        provided_token = (
+            request.headers.get("X-Telemetry-Token")
+            or bearer_token
+            or ""
+        ).strip()
+
+        return secrets.compare_digest(provided_token, SIMCONNECT_TELEMETRY_TOKEN)
+
+    remote_addr = request.remote_addr or ""
+
+    return (
+        remote_addr == "127.0.0.1"
+        or remote_addr == "::1"
+        or remote_addr.startswith("127.")
+    )
+
+
+class SimConnectTracker:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+    def _read_state_locked(self) -> dict[str, Any] | None:
+        if not os.path.exists(SIMCONNECT_STATE_PATH):
+            return None
+
+        try:
+            with open(SIMCONNECT_STATE_PATH, "r", encoding="utf-8") as handle:
+                state: Any = json.load(handle)
+
+            if not isinstance(state, dict):
+                return {
+                    "online": False,
+                    "connected": False,
+                    "status": "state_invalid",
+                    "last_error": "State file does not contain a JSON object.",
+                }
+
+            return state
+
+        except Exception as exc:
+            return {
+                "online": False,
+                "connected": False,
+                "status": "state_read_failed",
+                "last_error": str(exc),
+            }
+
+    def _write_state_locked(self, state: dict[str, Any]) -> None:
+        state_dir = os.path.dirname(SIMCONNECT_STATE_PATH)
+
+        if state_dir:
+            os.makedirs(state_dir, exist_ok=True)
+
+        temp_path = f"{SIMCONNECT_STATE_PATH}.tmp"
+
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+
+        os.replace(temp_path, SIMCONNECT_STATE_PATH)
+
+    def update_from_telemetry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = normalize_telemetry_payload(payload)
+
+        with self._lock:
+            self._write_state_locked(state)
+
+        return state
+
+    def _state_age_seconds(self, state: dict[str, Any]) -> float | None:
+        updated_at_raw: Any = state.get("updated_at")
+
+        if updated_at_raw is None:
+            updated_at_raw = state.get("received_at_unix")
+
+        if updated_at_raw is None or updated_at_raw == "":
+            return None
+
+        try:
+            updated_at = parse_finite_float(updated_at_raw, "updated_at")
+        except ValueError:
+            return None
+
+        return max(0.0, time.time() - updated_at)
+
+    def _is_stale(self, state: dict[str, Any]) -> bool:
+        age = self._state_age_seconds(state)
+
+        if age is None:
+            return False
+
+        return age > SIMCONNECT_STALE_SECONDS
+
+    def snapshot(self) -> dict[str, Any] | None:
+        with self._lock:
+            state = self._read_state_locked()
+
+            if not state or not state.get("online"):
+                return None
+
+            if self._is_stale(state):
+                return None
+
+            return {
+                "latitude": state.get("latitude"),
+                "longitude": state.get("longitude"),
+                "altitude": state.get("altitude"),
+                "groundspeed": state.get("groundspeed"),
+                "heading": state.get("heading"),
+                "callsign": state.get("callsign") or SIMCONNECT_CALLSIGN,
+                "flight_plan": state.get("flight_plan") or {
+                    "departure": SIMCONNECT_DEP,
+                    "arrival": SIMCONNECT_ARR,
+                    "aircraft_short": SIMCONNECT_AIRCRAFT,
+                },
+                "source": state.get("source") or "simconnect-bridge",
+            }
+
+    def status(self) -> dict[str, Any]:
+        with self._lock:
+            state = self._read_state_locked()
+
+            if not state:
+                return {
+                    "available": True,
+                    "simconnect_python_package_available": SIMCONNECT_AVAILABLE,
+                    "connected": False,
+                    "online": False,
+                    "stale": False,
+                    "state_path": SIMCONNECT_STATE_PATH,
+                    "last_error": f"State file not found at {SIMCONNECT_STATE_PATH}",
+                }
+
+            age_seconds = self._state_age_seconds(state)
+            stale = self._is_stale(state)
+
+            return {
+                "available": True,
+                "simconnect_python_package_available": SIMCONNECT_AVAILABLE,
+                "connected": bool(state.get("connected", state.get("online"))) and not stale,
+                "online": bool(state.get("online")) and not stale,
+                "stale": stale,
+                "age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+                "stale_after_seconds": SIMCONNECT_STALE_SECONDS,
+                "state_path": SIMCONNECT_STATE_PATH,
+                "last_error": state.get("last_error"),
+                "received_at": state.get("received_at"),
+                "source": state.get("source"),
+                "callsign": state.get("callsign"),
+            }
+
+
+simconnect_tracker = SimConnectTracker()
 
 
 def bytes_to_base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def parse_json_options(options) -> dict:
+def parse_json_options(options: Any) -> dict[str, Any]:
     return json.loads(options_to_json(options))
 
 
@@ -135,46 +470,69 @@ def ensure_webauthn():
 def is_discord_configured() -> bool:
     return bool(DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET and DISCORD_REDIRECT_URI)
 
-def get_vatsim_data():
-    now = time.time()
-    if now - _vatsim_cache["fetched_at"] < VATSIM_CACHE_TTL_SECONDS:
-        return _vatsim_cache["data"]
-    try:
-        r = requests.get(VATSIM_DATA_URL, timeout=10)
-        r.raise_for_status()
-        _vatsim_cache["data"] = r.json()
-        _vatsim_cache["fetched_at"] = now
-    except Exception as e:
-        print(f"VATSIM data fetch error: {e}")
-    return _vatsim_cache["data"]
+
+def build_local_tracker_id(user_id: int) -> str:
+    return f"{LOCAL_TRACKER_PREFIX}{user_id}"
+
+
+def ensure_tracking_profile(user_id: int) -> str:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT vatsim_id FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        tracker_id = str((row["vatsim_id"] if row else "") or "").strip()
+        if tracker_id:
+            return tracker_id
+
+        tracker_id = build_local_tracker_id(user_id)
+        conn.execute(
+            "UPDATE users SET vatsim_id = ? WHERE id = ?",
+            (tracker_id, user_id),
+        )
+        return tracker_id
+
+
+def ensure_session_tracking_profile() -> str | None:
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+
+    tracker_id = ensure_tracking_profile(int(user_id))
+    session["vatsim_id"] = tracker_id
+    return tracker_id
 
 
 def coerce_text(value: Any) -> str:
     if value is None:
         return ""
+
     if isinstance(value, dict):
         for key in ("#text", "text", "value"):
             nested = value.get(key)
             if nested not in (None, ""):
                 return str(nested).strip()
         return ""
+
     return str(value).strip()
 
 
-def coerce_float(value: Any):
+def coerce_float(value: Any) -> float | None:
     text = coerce_text(value)
     if not text:
         return None
+
     try:
         return float(text)
     except (TypeError, ValueError):
         return None
 
 
-def coerce_int(value: Any):
+def coerce_int(value: Any) -> int | None:
     text = coerce_text(value)
     if not text:
         return None
+
     try:
         return int(float(text))
     except (TypeError, ValueError):
@@ -185,34 +543,45 @@ def unix_to_iso8601(value: Any) -> str | None:
     unix_value = coerce_int(value)
     if unix_value is None:
         return None
+
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(unix_value))
 
 
-def get_simbrief_identity():
+def get_simbrief_identity() -> tuple[str, str] | None:
     if SIMBRIEF_USERID:
         return ("userid", SIMBRIEF_USERID)
+
     if SIMBRIEF_USERNAME:
         return ("username", SIMBRIEF_USERNAME)
+
     return None
 
 
-def extract_simbrief_route_points(payload: dict):
+def extract_simbrief_route_points(payload: dict[str, Any]) -> list[dict[str, Any]]:
     origin = payload.get("origin") or {}
     destination = payload.get("destination") or {}
     navlog = payload.get("navlog") or {}
-    fixes = navlog.get("fix") if isinstance(navlog, dict) else []
+
+    fixes: Any = navlog.get("fix") if isinstance(navlog, dict) else []
     if isinstance(fixes, dict):
         fixes = [fixes]
 
-    route_points = []
-    previous = None
+    route_points: list[dict[str, Any]] = []
+    previous: dict[str, Any] | None = None
 
-    def append_point(point):
+    def append_point(point: dict[str, Any]) -> None:
         nonlocal previous
+
         if point["lat"] is None or point["lng"] is None:
             return
-        if previous and abs(previous["lat"] - point["lat"]) < 1e-6 and abs(previous["lng"] - point["lng"]) < 1e-6:
+
+        if (
+            previous
+            and abs(previous["lat"] - point["lat"]) < 1e-6
+            and abs(previous["lng"] - point["lng"]) < 1e-6
+        ):
             return
+
         route_points.append(point)
         previous = point
 
@@ -228,8 +597,10 @@ def extract_simbrief_route_points(payload: dict):
     for fix in fixes or []:
         if not isinstance(fix, dict):
             continue
+
         lat = coerce_float(fix.get("pos_lat"))
         lng = coerce_float(fix.get("pos_long"))
+
         if lat is None or lng is None:
             continue
 
@@ -255,7 +626,7 @@ def extract_simbrief_route_points(payload: dict):
     return route_points
 
 
-def build_simbrief_summary(payload: dict):
+def build_simbrief_summary(payload: dict[str, Any]) -> dict[str, Any]:
     params = payload.get("params") or {}
     general = payload.get("general") or {}
     origin = payload.get("origin") or {}
@@ -269,6 +640,7 @@ def build_simbrief_summary(payload: dict):
     airline = coerce_text(general.get("icao_airline"))
     flight_number = coerce_text(general.get("flight_number"))
     callsign = coerce_text(general.get("callsign")) or f"{airline}{flight_number}".strip()
+
     if not callsign:
         callsign = coerce_text(general.get("flightid"))
 
@@ -307,7 +679,7 @@ def build_simbrief_summary(payload: dict):
     }
 
 
-def get_simbrief_data():
+def get_simbrief_data() -> dict[str, Any]:
     identity = get_simbrief_identity()
     if not identity:
         return {
@@ -335,11 +707,12 @@ def get_simbrief_data():
     if (
         _simbrief_cache["data"] is not None
         and _simbrief_cache["identity"] == identity
-        and now - _simbrief_cache["fetched_at"] < SIMBRIEF_CACHE_TTL_SECONDS
+        and now - float(_simbrief_cache["fetched_at"]) < SIMBRIEF_CACHE_TTL_SECONDS
     ):
         return _simbrief_cache["data"]
 
     params = {identity[0]: identity[1], "json": 1}
+
     try:
         response = requests.get(SIMBRIEF_API_URL, params=params, timeout=12)
         response.raise_for_status()
@@ -348,6 +721,7 @@ def get_simbrief_data():
         print(f"SimBrief data fetch error: {exc}")
         if _simbrief_cache["data"] is not None:
             return _simbrief_cache["data"]
+
         return {
             "configured": True,
             "available": False,
@@ -374,22 +748,12 @@ def get_simbrief_data():
     _simbrief_cache["identity"] = identity
     return data
 
-def find_pilot(vatsim_id: str):
-    data = get_vatsim_data()
-    if not data:
-        return None
-    for pilot in data.get("pilots", []):
-        if str(pilot.get("cid")) == str(vatsim_id):
-            return pilot
-    return None
+
+def get_simconnect_snapshot() -> dict[str, Any] | None:
+    return simconnect_tracker.snapshot()
 
 
-def build_pilot_index(data):
-    pilots = (data or {}).get("pilots", [])
-    return {str(pilot.get("cid")): pilot for pilot in pilots if pilot.get("cid")}
-
-
-def close_active_flight(conn, vatsim_id: str):
+def close_active_flight(conn: sqlite3.Connection, vatsim_id: str) -> None:
     conn.execute(
         """
         UPDATE flights
@@ -400,8 +764,8 @@ def close_active_flight(conn, vatsim_id: str):
     )
 
 
-def record_pilot_snapshot(conn, vatsim_id: str, pilot):
-    if not pilot:
+def record_tracker_snapshot(conn: sqlite3.Connection, vatsim_id: str, snapshot: dict[str, Any] | None) -> None:
+    if not snapshot:
         return
 
     latest = conn.execute(
@@ -422,11 +786,11 @@ def record_pilot_snapshot(conn, vatsim_id: str, pilot):
     ).fetchone()
 
     now_unix = int(time.time())
-    lat = pilot.get("latitude")
-    lng = pilot.get("longitude")
-    altitude = pilot.get("altitude")
-    groundspeed = pilot.get("groundspeed")
-    callsign = pilot.get("callsign")
+    lat = snapshot.get("latitude")
+    lng = snapshot.get("longitude")
+    altitude = snapshot.get("altitude")
+    groundspeed = snapshot.get("groundspeed")
+    callsign = snapshot.get("callsign")
 
     if latest:
         same_position = (
@@ -448,7 +812,7 @@ def record_pilot_snapshot(conn, vatsim_id: str, pilot):
         (vatsim_id, callsign, lat, lng, altitude, groundspeed),
     )
 
-    fp = pilot.get("flight_plan") or {}
+    fp = snapshot.get("flight_plan") or {}
     conn.execute(
         """
         INSERT INTO flights (vatsim_id, callsign, dep, arr, aircraft)
@@ -468,7 +832,7 @@ def record_pilot_snapshot(conn, vatsim_id: str, pilot):
     )
 
 
-def great_circle_distance_km(lat1, lng1, lat2, lng2):
+def great_circle_distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     radius_km = 6371.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -482,7 +846,7 @@ def great_circle_distance_km(lat1, lng1, lat2, lng2):
     return 2 * radius_km * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def should_split_segment(previous, current):
+def should_split_segment(previous: dict[str, Any] | None, current: dict[str, Any]) -> bool:
     if previous is None:
         return True
 
@@ -492,16 +856,19 @@ def should_split_segment(previous, current):
         return True
 
     distance_km = great_circle_distance_km(
-        previous["lat"], previous["lng"], current["lat"], current["lng"]
+        float(previous["lat"]),
+        float(previous["lng"]),
+        float(current["lat"]),
+        float(current["lng"]),
     )
     return distance_km > MAX_SEGMENT_DISTANCE_KM
 
 
-def build_track_segments(rows):
-    segments = []
-    points = []
-    current_segment = []
-    previous = None
+def build_track_segments(rows: list[sqlite3.Row]) -> tuple[list[dict[str, Any]], list[list[list[float]]]]:
+    segments: list[list[list[float]]] = []
+    points: list[dict[str, Any]] = []
+    current_segment: list[list[float]] = []
+    previous: dict[str, Any] | None = None
 
     for row in rows:
         point = {
@@ -530,42 +897,42 @@ def build_track_segments(rows):
     return points, segments
 
 
-def poll_linked_vatsim_users():
-    data = get_vatsim_data()
-    if not data:
-        return
+def poll_linked_tracker_users() -> None:
+    snapshot = get_simconnect_snapshot()
 
-    pilots_by_cid = build_pilot_index(data)
     with get_db() as conn:
         linked_users = conn.execute(
             "SELECT vatsim_id FROM users WHERE vatsim_id IS NOT NULL"
         ).fetchall()
+
         for row in linked_users:
             vatsim_id = str(row["vatsim_id"])
-            pilot = pilots_by_cid.get(vatsim_id)
-            if pilot:
-                record_pilot_snapshot(conn, vatsim_id, pilot)
+            if snapshot:
+                record_tracker_snapshot(conn, vatsim_id, snapshot)
             else:
                 close_active_flight(conn, vatsim_id)
 
 
-def tracker_loop():
+def tracker_loop() -> None:
     while True:
         try:
-            poll_linked_vatsim_users()
+            poll_linked_tracker_users()
         except Exception as exc:
             print(f"Background tracker error: {exc}")
+
         time.sleep(TRACKER_POLL_SECONDS)
 
 
-def start_background_tracker():
+def start_background_tracker() -> None:
     global _tracker_thread
+
     with _tracker_lock:
         if _tracker_thread and _tracker_thread.is_alive():
             return
+
         _tracker_thread = threading.Thread(
             target=tracker_loop,
-            name="vatsim-background-tracker",
+            name="simconnect-background-tracker",
             daemon=True,
         )
         _tracker_thread.start()
@@ -593,16 +960,19 @@ def get_current_user():
             (user_id,),
         ).fetchone()
 
-# ── Database ──────────────────────────────────────────────────────────────────
+
+# Database
 DB_PATH = os.path.join(os.path.dirname(__file__), "flights.db")
 
-def get_db():
+
+def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-def init_db():
+
+def init_db() -> None:
     with get_db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -654,29 +1024,39 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_passkeys_user  ON passkeys(user_id);
         """)
 
+
 init_db()
 start_background_tracker()
 
-# ── Auth decorators ───────────────────────────────────────────────────────────
+
+# Auth decorators
 def require_auth(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
             return jsonify({"error": "unauthorized"}), 401
+
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 def require_linked(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         if not session.get("user_id"):
             return jsonify({"error": "unauthorized"}), 401
-        if not session.get("vatsim_id"):
+
+        tracker_id = session.get("vatsim_id") or ensure_session_tracking_profile()
+        if not tracker_id:
             return jsonify({"error": "no_vatsim_linked"}), 403
+
         return fn(*args, **kwargs)
+
     return wrapper
 
-# ── Discord OAuth ─────────────────────────────────────────────────────────────
+
+# Discord OAuth
 @app.route("/auth/login")
 def login():
     if not is_discord_configured():
@@ -685,13 +1065,14 @@ def login():
     state = secrets.token_urlsafe(16)
     session["oauth_state"] = state
     params = {
-        "client_id":     DISCORD_CLIENT_ID,
-        "redirect_uri":  DISCORD_REDIRECT_URI,
+        "client_id": DISCORD_CLIENT_ID,
+        "redirect_uri": DISCORD_REDIRECT_URI,
         "response_type": "code",
-        "scope":         "identify",
-        "state":         state,
+        "scope": "identify",
+        "state": state,
     }
     return redirect(f"{DISCORD_AUTH_URL}?{urlencode(params)}")
+
 
 @app.route("/auth/callback")
 def callback():
@@ -701,120 +1082,117 @@ def callback():
     if request.args.get("error"):
         return redirect(f"/?error={request.args.get('error')}")
 
-    code  = request.args.get("code")
+    code = request.args.get("code")
     state = request.args.get("state")
     if state != session.pop("oauth_state", None):
         return redirect("/?error=state_mismatch")
 
-    # Exchange code for token
     try:
-        token_resp = requests.post(DISCORD_TOKEN_URL, data={
-            "grant_type":    "authorization_code",
-            "client_id":     DISCORD_CLIENT_ID,
-            "client_secret": DISCORD_CLIENT_SECRET,
-            "redirect_uri":  DISCORD_REDIRECT_URI,
-            "code":          code,
-        }, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=10)
+        token_resp = requests.post(
+            DISCORD_TOKEN_URL,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": DISCORD_CLIENT_ID,
+                "client_secret": DISCORD_CLIENT_SECRET,
+                "redirect_uri": DISCORD_REDIRECT_URI,
+                "code": code,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
         token_resp.raise_for_status()
         tokens = token_resp.json()
-    except Exception as e:
-        print(f"Discord token error: {e}")
+    except Exception as exc:
+        print(f"Discord token error: {exc}")
         return redirect("/?error=token_exchange_failed")
 
-    # Fetch Discord user info
     try:
-        user_resp = requests.get(DISCORD_USER_URL, headers={
-            "Authorization": f"Bearer {tokens['access_token']}"
-        }, timeout=10)
+        user_resp = requests.get(
+            DISCORD_USER_URL,
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            timeout=10,
+        )
         user_resp.raise_for_status()
         discord_user = user_resp.json()
     except Exception:
         return redirect("/?error=user_fetch_failed")
 
-    discord_id   = str(discord_user.get("id", ""))
+    discord_id = str(discord_user.get("id", ""))
     discriminator = discord_user.get("discriminator", "0")
-    discord_name  = discord_user.get("username", "")
+    discord_name = discord_user.get("username", "")
+
     if discriminator and discriminator != "0":
         discord_name = f"{discord_name}#{discriminator}"
 
-    # ── Allowlist gate ────────────────────────────────────────────────────────
     if discord_id not in ALLOWED_DISCORD_IDS:
         return redirect("/?error=access_denied")
 
-    # Upsert user
     with get_db() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO users (discord_id, discord_name)
             VALUES (?, ?)
             ON CONFLICT(discord_id) DO UPDATE SET discord_name = excluded.discord_name
-        """, (discord_id, discord_name))
+            """,
+            (discord_id, discord_name),
+        )
         row = conn.execute(
-            "SELECT id, vatsim_id FROM users WHERE discord_id = ?", (discord_id,)
+            "SELECT id, vatsim_id FROM users WHERE discord_id = ?",
+            (discord_id,),
         ).fetchone()
         user_id = row["id"] if row else None
-        vatsim_id = row["vatsim_id"] if row else None
+        vatsim_id = ensure_tracking_profile(user_id) if user_id else None
 
-    session["user_id"]      = user_id
-    session["discord_id"]   = discord_id
+    session["user_id"] = user_id
+    session["discord_id"] = discord_id
     session["discord_name"] = discord_name
-    session["vatsim_id"]    = vatsim_id
-    session["auth_method"]  = "discord"
+    session["vatsim_id"] = vatsim_id
+    session["auth_method"] = "discord"
 
-    return redirect("/link-vatsim" if not vatsim_id else "/dashboard")
+    return redirect("/dashboard")
+
 
 @app.route("/auth/logout")
 def logout():
     session.clear()
     return redirect("/")
 
-# ── VATSIM Linking ────────────────────────────────────────────────────────────
+
+# VATSIM linking
 @app.route("/api/link-vatsim", methods=["POST"])
 @require_auth
 def link_vatsim():
-    user_id     = session["user_id"]
-    data       = request.get_json() or {}
-    vatsim_id  = str(data.get("vatsim_id", "")).strip()
+    tracker_id = ensure_session_tracking_profile()
+    return jsonify({"ok": True, "vatsim_id": tracker_id, "tracker_id": tracker_id})
 
-    if not vatsim_id.isdigit() or len(vatsim_id) < 4:
-        return jsonify({"error": "Invalid VATSIM CID — must be a number (e.g. 1234567)"}), 400
-
-    try:
-        with get_db() as conn:
-            conn.execute(
-                "UPDATE users SET vatsim_id = ? WHERE id = ?",
-                (vatsim_id, user_id)
-            )
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "That VATSIM CID is already linked to another account"}), 409
-
-    session["vatsim_id"] = vatsim_id
-    return jsonify({"ok": True, "vatsim_id": vatsim_id})
 
 @app.route("/api/unlink-vatsim", methods=["POST"])
 @require_auth
 def unlink_vatsim():
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE users SET vatsim_id = NULL WHERE id = ?",
-            (session["user_id"],)
-        )
-    session["vatsim_id"] = None
-    return jsonify({"ok": True})
+    tracker_id = ensure_session_tracking_profile()
+    return jsonify({"ok": True, "tracker_id": tracker_id})
 
-# ── User info ─────────────────────────────────────────────────────────────────
+
+# User info
 @app.route("/api/me")
 def me():
     user = get_current_user()
+
     if not user:
         return jsonify({"authenticated": False}), 401
+
+    tracker_id = user["vatsim_id"] or ensure_tracking_profile(user["id"])
+    session["vatsim_id"] = tracker_id
+
     return jsonify({
         "authenticated": True,
-        "user_id":       user["id"],
-        "discord_id":    user["discord_id"],
-        "discord_name":  user["discord_name"] or "",
-        "vatsim_id":     user["vatsim_id"],
-        "auth_method":   session.get("auth_method", "discord"),
-        "has_passkey":   bool(user["has_passkey"]),
+        "user_id": user["id"],
+        "discord_id": user["discord_id"],
+        "discord_name": user["discord_name"] or "",
+        "vatsim_id": tracker_id,
+        "tracker_id": tracker_id,
+        "auth_method": session.get("auth_method", "discord"),
+        "has_passkey": bool(user["has_passkey"]),
     })
 
 
@@ -836,6 +1214,7 @@ def passkey_register_options():
         ).fetchall()
 
     user_label = user["discord_name"] or user["discord_id"] or f"user-{user['id']}"
+
     try:
         options = generate_registration_options(
             rp_id=get_passkey_rp_id(),
@@ -875,6 +1254,7 @@ def passkey_register_verify():
         return jsonify({"error": "unauthorized"}), 401
 
     credential = request.get_json() or {}
+
     try:
         verification = verify_registration_response(
             credential=credential,
@@ -887,6 +1267,7 @@ def passkey_register_verify():
         return json_error(f"registration_failed: {exc}", 400)
 
     transports = credential.get("response", {}).get("transports", [])
+
     with get_db() as conn:
         conn.execute(
             """
@@ -948,6 +1329,7 @@ def passkey_auth_verify():
 
     credential = request.get_json() or {}
     credential_id = credential.get("id")
+
     if not credential_id:
         return jsonify({"error": "missing_credential_id"}), 400
 
@@ -1001,53 +1383,109 @@ def passkey_auth_verify():
             ),
         )
 
+    tracker_id = passkey["vatsim_id"] or ensure_tracking_profile(passkey["user_id"])
+
     session.clear()
     session["user_id"] = passkey["user_id"]
     session["discord_id"] = passkey["discord_id"]
     session["discord_name"] = passkey["discord_name"]
-    session["vatsim_id"] = passkey["vatsim_id"]
+    session["vatsim_id"] = tracker_id
     session["auth_method"] = "passkey"
 
-    return jsonify({"ok": True, "vatsim_id": passkey["vatsim_id"]})
+    return jsonify({"ok": True, "vatsim_id": tracker_id, "tracker_id": tracker_id})
 
-# ── Flight data ───────────────────────────────────────────────────────────────
+
+# SimConnect telemetry intake
+@app.route("/api/telemetry", methods=["POST"])
+def telemetry():
+    if not is_telemetry_request_authorized():
+        return jsonify({"error": "telemetry_unauthorized"}), 401
+
+    payload_raw: Any = request.get_json(silent=True)
+
+    if payload_raw is None:
+        return jsonify({"error": "invalid_json_body"}), 400
+
+    if not isinstance(payload_raw, dict):
+        return jsonify({"error": "invalid_json_body"}), 400
+
+    try:
+        state = simconnect_tracker.update_from_telemetry(payload_raw)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        print(f"Telemetry write error: {exc}")
+        return jsonify({"error": "telemetry_write_failed"}), 500
+
+    return jsonify({
+        "ok": True,
+        "online": state.get("online"),
+        "connected": state.get("connected"),
+        "callsign": state.get("callsign"),
+        "received_at": state.get("received_at"),
+        "status": simconnect_tracker.status(),
+    })
+
+
+@app.route("/api/simconnect/status")
+@require_auth
+def simconnect_status():
+    return jsonify(simconnect_tracker.status())
+
+
+# Flight data
 @app.route("/api/live")
 @require_linked
 def live_flight():
     vatsim_id = session["vatsim_id"]
-    pilot = find_pilot(vatsim_id)
+    snapshot = get_simconnect_snapshot()
 
-    if not pilot:
+    if not snapshot:
         with get_db() as conn:
             close_active_flight(conn, vatsim_id)
-        return jsonify({"online": False})
+
+        return jsonify({
+            "online": False,
+            "source": "simconnect",
+            "tracker_id": vatsim_id,
+            "status": simconnect_tracker.status(),
+        })
 
     with get_db() as conn:
-        record_pilot_snapshot(conn, vatsim_id, pilot)
+        record_tracker_snapshot(conn, vatsim_id, snapshot)
 
     return jsonify({
-        "online":      True,
-        "callsign":    pilot.get("callsign"),
-        "lat":         pilot.get("latitude"),
-        "lng":         pilot.get("longitude"),
-        "altitude":    pilot.get("altitude"),
-        "groundspeed": pilot.get("groundspeed"),
-        "heading":     pilot.get("heading"),
-        "dep":         (pilot.get("flight_plan") or {}).get("departure",""),
-        "arr":         (pilot.get("flight_plan") or {}).get("arrival",""),
-        "aircraft":    (pilot.get("flight_plan") or {}).get("aircraft_short",""),
+        "online": True,
+        "callsign": snapshot.get("callsign"),
+        "lat": snapshot.get("latitude"),
+        "lng": snapshot.get("longitude"),
+        "altitude": snapshot.get("altitude"),
+        "groundspeed": snapshot.get("groundspeed"),
+        "heading": snapshot.get("heading"),
+        "dep": (snapshot.get("flight_plan") or {}).get("departure", ""),
+        "arr": (snapshot.get("flight_plan") or {}).get("arrival", ""),
+        "aircraft": (snapshot.get("flight_plan") or {}).get("aircraft_short", ""),
+        "source": "simconnect",
+        "tracker_id": vatsim_id,
+        "status": simconnect_tracker.status(),
     })
+
 
 @app.route("/api/heatmap")
 @require_linked
 def heatmap():
     vatsim_id = session["vatsim_id"]
+
     with get_db() as conn:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT lat, lng, COUNT(*) as weight
             FROM flight_points WHERE vatsim_id = ?
             GROUP BY ROUND(lat,2), ROUND(lng,2)
-        """, (vatsim_id,)).fetchall()
+            """,
+            (vatsim_id,),
+        ).fetchall()
+
         track_rows = conn.execute(
             """
             SELECT
@@ -1081,7 +1519,7 @@ def heatmap():
         }
 
     return jsonify({
-        "points": [{"lat": r["lat"], "lng": r["lng"], "weight": r["weight"]} for r in rows],
+        "points": [{"lat": row["lat"], "lng": row["lng"], "weight": row["weight"]} for row in rows],
         "segments": segments,
         "recent_track": recent_track,
         "bounds": bounds,
@@ -1091,66 +1529,88 @@ def heatmap():
         },
     })
 
+
 @app.route("/api/flights")
 @require_linked
 def flights():
     vatsim_id = session["vatsim_id"]
+
     with get_db() as conn:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT callsign, dep, arr, aircraft, started_at, ended_at
             FROM flights WHERE vatsim_id = ?
             ORDER BY started_at DESC LIMIT 20
-        """, (vatsim_id,)).fetchall()
-    return jsonify({"flights": [dict(r) for r in rows]})
+            """,
+            (vatsim_id,),
+        ).fetchall()
+
+    return jsonify({"flights": [dict(row) for row in rows]})
+
 
 @app.route("/api/stats")
 @require_linked
 def stats():
     vatsim_id = session["vatsim_id"]
+
     with get_db() as conn:
-        total_points  = conn.execute(
-            "SELECT COUNT(*) as c FROM flight_points WHERE vatsim_id=?", (vatsim_id,)
+        total_points = conn.execute(
+            "SELECT COUNT(*) as c FROM flight_points WHERE vatsim_id=?",
+            (vatsim_id,),
         ).fetchone()["c"]
+
         total_flights = conn.execute(
-            "SELECT COUNT(*) as c FROM flights WHERE vatsim_id=?", (vatsim_id,)
+            "SELECT COUNT(*) as c FROM flights WHERE vatsim_id=?",
+            (vatsim_id,),
         ).fetchone()["c"]
-        top_routes = conn.execute("""
+
+        top_routes = conn.execute(
+            """
             SELECT dep, arr, COUNT(*) as times
             FROM flights WHERE vatsim_id=? AND dep!='' AND arr!=''
             GROUP BY dep, arr ORDER BY times DESC LIMIT 5
-        """, (vatsim_id,)).fetchall()
+            """,
+            (vatsim_id,),
+        ).fetchall()
+
     return jsonify({
-        "total_points":  total_points,
+        "total_points": total_points,
         "total_flights": total_flights,
-        "top_routes":    [dict(r) for r in top_routes],
+        "top_routes": [dict(row) for row in top_routes],
     })
 
-# ── Serve frontend ────────────────────────────────────────────────────────────
+
 @app.route("/api/simbrief")
 @require_auth
 def simbrief():
     return jsonify(get_simbrief_data())
 
 
+# Serve frontend
 @app.route("/")
 def index():
     return send_from_directory("../frontend", "index.html")
+
 
 @app.route("/dashboard")
 def dashboard():
     return send_from_directory("../frontend", "dashboard.html")
 
+
 @app.route("/link-vatsim")
 def link_vatsim_page():
-    return send_from_directory("../frontend", "link-vatsim.html")
+    return redirect("/dashboard")
+
 
 @app.route("/roadmap")
 def roadmap_page():
     return send_from_directory("../frontend", "roadmap.html")
 
+
 @app.route("/<path:path>")
 def static_files(path):
     return send_from_directory("../frontend", path)
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

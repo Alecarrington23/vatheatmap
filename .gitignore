@@ -10,8 +10,7 @@ flights.db-shm
 flights.db-wal
 
 # Virtual Airline
-Star Alliance Virtual Data - */
-backend/import_star_alliance_data.py
+Virtual Airline data - */
 
 # Python
 backend/__pycache__/
@@ -20,3 +19,4 @@ backend/__pycache__/
 # Simconnect
 src/SimpleSimConnector
 backend/app-backup.py
+backend/simconnect-state.json

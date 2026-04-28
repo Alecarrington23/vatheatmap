@@ -197,7 +197,7 @@ namespace SimpleSimConnector
         {
             Text = "Simple Sim Connector";
             Width = 760;
-            Height = 220;
+            Height = 230;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             ShowIcon = true;

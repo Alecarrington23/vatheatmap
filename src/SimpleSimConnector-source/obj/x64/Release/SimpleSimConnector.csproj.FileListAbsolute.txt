@@ -3,3 +3,4 @@ C:\Users\Alex\simplesim\src\SimpleSimConnector-source\obj\x64\Release\SimpleSimC
 C:\Users\Alex\simplesim\src\SimpleSimConnector-source\obj\x64\Release\SimpleSimConnector.csproj.CoreCompileInputs.cache
 C:\Users\Alex\simplesim\src\SimpleSimConnector-source\obj\x64\Release\SimpleSi.275A51F7.Up2Date
 C:\Users\Alex\simplesim\src\SimpleSimConnector-source\obj\x64\Release\SimpleSimConnector.exe
+C:\Users\Alex\simplesim\build-temp\SimpleSimConnector.exe

@@ -23,13 +23,23 @@ namespace SimpleSimConnector
     enum DEFINITIONS
     {
         Identity,
-        Telemetry
+        CoreFlight,
+        Weather,
+        Radio,
+        Fuel,
+        Engine,
+        Autopilot
     }
 
     enum REQUESTS
     {
         Identity,
-        Telemetry
+        CoreFlight,
+        Weather,
+        Radio,
+        Fuel,
+        Engine,
+        Autopilot
     }
 
     enum EVENTS
@@ -42,27 +52,33 @@ namespace SimpleSimConnector
     {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string title;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string atcModel;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string atcType;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
-    struct Telemetry
+    struct CoreFlightData
     {
         public double latitude;
         public double longitude;
         public double altitudeMeters;
-        public double groundSpeedMetersPerSecond;
+        public double groundSpeedKnots;
         public double headingTrueDegrees;
         public double headingMagneticDegrees;
         public double onGround;
-        public double verticalSpeedMetersPerSecond;
+        public double verticalSpeedFeetPerSecond;
         public double pitchDegrees;
         public double bankDegrees;
         public double gForce;
         public double groundElevationMeters;
         public double landingRateMetersPerSecond;
-        public double indicatedAirspeedMetersPerSecond;
-        public double trueAirspeedMetersPerSecond;
-        public double barberPoleAirspeedMetersPerSecond;
+        public double indicatedAirspeedKnots;
+        public double trueAirspeedKnots;
+        public double barberPoleAirspeedKnots;
         public double parkingBrake;
         public double numFlapPositions;
         public double gearDown;
@@ -72,11 +88,65 @@ namespace SimpleSimConnector
         public double lightInstruments;
         public double lightLogo;
         public double lightCabin;
+        public double cabinAltitudeMeters;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct WeatherData
+    {
+        public double outsideAirTemperatureCelsius;
+        public double ambientPressureInchesHg;
+        public double seaLevelPressureMillibars;
+        public double visibilityMeters;
+        public double windSpeedKnots;
+        public double windDirectionDegrees;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct RadioData
+    {
+        public double com1Available;
+        public double com2Available;
+        public double nav1Available;
+        public double nav2Available;
         public double com1Frequency;
         public double com2Frequency;
         public double nav1Frequency;
         public double nav2Frequency;
         public double transponderCode;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct FuelData
+    {
+        public double fuelWeightPerGallon;
+        public double fuelTankCenterCapacityGallons;
+        public double fuelTankCenterLevel;
+        public double fuelTankCenter2CapacityGallons;
+        public double fuelTankCenter2Level;
+        public double fuelTankCenter3CapacityGallons;
+        public double fuelTankCenter3Level;
+        public double fuelTankLeftMainCapacityGallons;
+        public double fuelTankLeftMainLevel;
+        public double fuelTankLeftAuxCapacityGallons;
+        public double fuelTankLeftAuxLevel;
+        public double fuelTankLeftTipCapacityGallons;
+        public double fuelTankLeftTipLevel;
+        public double fuelTankRightMainCapacityGallons;
+        public double fuelTankRightMainLevel;
+        public double fuelTankRightAuxCapacityGallons;
+        public double fuelTankRightAuxLevel;
+        public double fuelTankRightTipCapacityGallons;
+        public double fuelTankRightTipLevel;
+        public double fuelTankExternal1CapacityGallons;
+        public double fuelTankExternal1Level;
+        public double fuelTankExternal2CapacityGallons;
+        public double fuelTankExternal2Level;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct EngineData
+    {
         public double engineType;
         public double itt1DegreesCelsius;
         public double itt2DegreesCelsius;
@@ -86,37 +156,12 @@ namespace SimpleSimConnector
         public double apuPctRpm;
         public double apuSwitch;
         public double apuGeneratorActive;
-        public double fuelWeightPerGallon;
-        public double fuelTankCenterCapacityGallons;
-        public double fuelTankCenterQuantityGallons;
-        public double fuelTankCenter2CapacityGallons;
-        public double fuelTankCenter2QuantityGallons;
-        public double fuelTankCenter3CapacityGallons;
-        public double fuelTankCenter3QuantityGallons;
-        public double fuelTankLeftMainCapacityGallons;
-        public double fuelTankLeftMainQuantityGallons;
-        public double fuelTankLeftAuxCapacityGallons;
-        public double fuelTankLeftAuxQuantityGallons;
-        public double fuelTankLeftTipCapacityGallons;
-        public double fuelTankLeftTipQuantityGallons;
-        public double fuelTankRightMainCapacityGallons;
-        public double fuelTankRightMainQuantityGallons;
-        public double fuelTankRightAuxCapacityGallons;
-        public double fuelTankRightAuxQuantityGallons;
-        public double fuelTankRightTipCapacityGallons;
-        public double fuelTankRightTipQuantityGallons;
-        public double fuelTankExternal1CapacityGallons;
-        public double fuelTankExternal1QuantityGallons;
-        public double fuelTankExternal2CapacityGallons;
-        public double fuelTankExternal2QuantityGallons;
-        public double outsideAirTemperatureCelsius;
-        public double visibilityMeters;
-        public double windSpeedKnots;
-        public double windDirectionDegrees;
-        public double ambientPressureInchesHg;
-        public double seaLevelPressurePascal;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct AutopilotData
+    {
         public double barometerSettingMillibars;
-        public double cabinAltitudeMeters;
         public double yawDamperEnabled;
         public double flightDirectorEnabled;
         public double autopilotAirspeedHoldKnots;
@@ -130,6 +175,12 @@ namespace SimpleSimConnector
         public double autopilotAirspeedHoldActive;
         public double autopilotMachHoldActive;
         public double autopilotVerticalSpeedHoldActive;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct SingleValueData
+    {
+        public double value;
     }
 
     class ConnectorSettings
@@ -241,8 +292,144 @@ namespace SimpleSimConnector
         private double latestFrameRate = double.NaN;
         private double latestSimulationRate = double.NaN;
         private string latestAircraftTitle = "";
+        private IdentityData? latestIdentityData;
+        private CoreFlightData? latestCoreFlightData;
+        private WeatherData? latestWeatherData;
+        private RadioData? latestRadioData;
+        private FuelData? latestFuelData;
+        private EngineData? latestEngineData;
+        private AutopilotData? latestAutopilotData;
         private readonly List<string> identityDefinitionNames = new List<string>();
-        private readonly List<string> telemetryDefinitionNames = new List<string>();
+        private readonly List<string> coreFlightDefinitionNames = new List<string>();
+        private readonly List<string> weatherDefinitionNames = new List<string>();
+        private readonly List<string> radioDefinitionNames = new List<string>();
+        private readonly List<string> fuelDefinitionNames = new List<string>();
+        private readonly List<string> engineDefinitionNames = new List<string>();
+        private readonly List<string> autopilotDefinitionNames = new List<string>();
+        private readonly Dictionary<int, string> fenixRequestIdToVarName = new Dictionary<int, string>();
+        private readonly Dictionary<int, string> fenixDefinitionIdToVarName = new Dictionary<int, string>();
+        private readonly Dictionary<string, double?> fenixLvarValues = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> fenixReadableVarNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> fenixDiscoveredVarSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> fenixDiscoveredVars = new List<string>();
+        private IAircraftAdapter activeAircraftAdapter = new GenericAircraftAdapter();
+        private AircraftIdentityInfo latestAircraftIdentity = AircraftAdapterFactory.ResolveIdentity("", "", "", "");
+        private string fenixCockpitBehaviorPath = "";
+        private string fenixPackagePath = "";
+
+        private const int FenixDefinitionBase = 1000;
+        private const int FenixRequestBase = 2000;
+
+        private static readonly SimVarDefinition[] CoreFlightDefinitions =
+        {
+            new SimVarDefinition("latitude", "PLANE LATITUDE", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", "-90..90"),
+            new SimVarDefinition("longitude", "PLANE LONGITUDE", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", "-180..180"),
+            new SimVarDefinition("altitudeMeters", "PLANE ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", "n/a"),
+            new SimVarDefinition("groundSpeedKnots", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..150"),
+            new SimVarDefinition("headingTrueDegrees", "PLANE HEADING DEGREES TRUE", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", "0..360"),
+            new SimVarDefinition("headingMagneticDegrees", "PLANE HEADING DEGREES MAGNETIC", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", "0..360"),
+            new SimVarDefinition("onGround", "SIM ON GROUND", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("verticalSpeedFeetPerSecond", "VERTICAL SPEED", null, "feet per second", "FLOAT64", "ft/s", "m/s", "ft/s * 0.3048", "n/a"),
+            new SimVarDefinition("pitchDegrees", "PLANE PITCH DEGREES", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", "n/a"),
+            new SimVarDefinition("bankDegrees", "PLANE BANK DEGREES", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", "n/a"),
+            new SimVarDefinition("gForce", "G FORCE", null, "gforce", "FLOAT64", "g", "g", "identity", "n/a"),
+            new SimVarDefinition("groundElevationMeters", "GROUND ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", "n/a"),
+            new SimVarDefinition("landingRateMetersPerSecond", "PLANE TOUCHDOWN NORMAL VELOCITY", null, "meters per second", "FLOAT64", "m/s", "m/s", "identity", "n/a"),
+            new SimVarDefinition("indicatedAirspeedKnots", "AIRSPEED INDICATED", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..250"),
+            new SimVarDefinition("trueAirspeedKnots", "AIRSPEED TRUE", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..350"),
+            new SimVarDefinition("barberPoleAirspeedKnots", "AIRSPEED BARBER POLE", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..400"),
+            new SimVarDefinition("parkingBrake", "BRAKE PARKING POSITION", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("numFlapPositions", "TRAILING EDGE FLAPS NUM HANDLE POSITIONS", null, "number", "FLOAT64", "count", "count", "identity", "0..20"),
+            new SimVarDefinition("gearDown", "GEAR HANDLE POSITION", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightNavigation", "LIGHT NAV", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightBeacon", "LIGHT BEACON", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightStrobes", "LIGHT STROBE", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightInstruments", "LIGHT PANEL", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightLogo", "LIGHT LOGO", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("lightCabin", "LIGHT CABIN", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("cabinAltitudeMeters", "PRESSURIZATION CABIN ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", "n/a")
+        };
+
+        private static readonly SimVarDefinition[] WeatherDefinitions =
+        {
+            new SimVarDefinition("outsideAirTemperatureCelsius", "AMBIENT TEMPERATURE", null, "celsius", "FLOAT64", "celsius", "celsius", "identity", "-100..70"),
+            new SimVarDefinition("ambientPressureInchesHg", "AMBIENT PRESSURE", null, "inHg", "FLOAT64", "inHg", "pascal", "inHg * 3386.389", "15000..110000"),
+            new SimVarDefinition("seaLevelPressureMillibars", "SEA LEVEL PRESSURE", null, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "80000..110000"),
+            new SimVarDefinition("visibilityMeters", "AMBIENT VISIBILITY", null, "meters", "FLOAT64", "meters", "km", "meters / 1000", ">= 0"),
+            new SimVarDefinition("windSpeedKnots", "AMBIENT WIND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..150"),
+            new SimVarDefinition("windDirectionDegrees", "AMBIENT WIND DIRECTION", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", "0..360")
+        };
+
+        private static readonly SimVarDefinition[] RadioDefinitions =
+        {
+            new SimVarDefinition("com1Available", "COM AVAILABLE:1", 1, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("com2Available", "COM AVAILABLE:2", 2, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("nav1Available", "NAV AVAILABLE:1", 1, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("nav2Available", "NAV AVAILABLE:2", 2, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("com1Frequency", "COM ACTIVE FREQUENCY:1", 1, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", "118.00..136.99"),
+            new SimVarDefinition("com2Frequency", "COM ACTIVE FREQUENCY:2", 2, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", "118.00..136.99"),
+            new SimVarDefinition("nav1Frequency", "NAV ACTIVE FREQUENCY:1", 1, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "108.00..117.95"),
+            new SimVarDefinition("nav2Frequency", "NAV ACTIVE FREQUENCY:2", 2, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "108.00..117.95"),
+            new SimVarDefinition("transponderCode", "TRANSPONDER CODE:1", 1, "number", "FLOAT64", "number", "octal string", "format 0000", "0000..7777")
+        };
+
+        private static readonly SimVarDefinition[] FuelDefinitions =
+        {
+            new SimVarDefinition("fuelWeightPerGallon", "FUEL WEIGHT PER GALLON", null, "pounds", "FLOAT64", "lb/gal", "kg factor", "lb * 0.45359237", "4.0..8.5"),
+            new SimVarDefinition("fuelTankCenterCapacityGallons", "FUEL TANK CENTER CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankCenterLevel", "FUEL TANK CENTER LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankCenter2CapacityGallons", "FUEL TANK CENTER2 CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankCenter2Level", "FUEL TANK CENTER2 LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankCenter3CapacityGallons", "FUEL TANK CENTER3 CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankCenter3Level", "FUEL TANK CENTER3 LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankLeftMainCapacityGallons", "FUEL TANK LEFT MAIN CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankLeftMainLevel", "FUEL TANK LEFT MAIN LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankLeftAuxCapacityGallons", "FUEL TANK LEFT AUX CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankLeftAuxLevel", "FUEL TANK LEFT AUX LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankLeftTipCapacityGallons", "FUEL TANK LEFT TIP CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankLeftTipLevel", "FUEL TANK LEFT TIP LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankRightMainCapacityGallons", "FUEL TANK RIGHT MAIN CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankRightMainLevel", "FUEL TANK RIGHT MAIN LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankRightAuxCapacityGallons", "FUEL TANK RIGHT AUX CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankRightAuxLevel", "FUEL TANK RIGHT AUX LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankRightTipCapacityGallons", "FUEL TANK RIGHT TIP CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankRightTipLevel", "FUEL TANK RIGHT TIP LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankExternal1CapacityGallons", "FUEL TANK EXTERNAL1 CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankExternal1Level", "FUEL TANK EXTERNAL1 LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100"),
+            new SimVarDefinition("fuelTankExternal2CapacityGallons", "FUEL TANK EXTERNAL2 CAPACITY", null, "gallons", "FLOAT64", "gallons", "kg input", "gal * density", "0..300000"),
+            new SimVarDefinition("fuelTankExternal2Level", "FUEL TANK EXTERNAL2 LEVEL", null, "percent over 100", "FLOAT64", "0..1", "percent", "raw*100", "0..100")
+        };
+
+        private static readonly SimVarDefinition[] EngineDefinitions =
+        {
+            new SimVarDefinition("engineType", "ENGINE TYPE", null, "enum", "FLOAT64", "enum", "enum string", "enum mapping", "known enum"),
+            new SimVarDefinition("itt1DegreesCelsius", "TURB ENG ITT:1", 1, "celsius", "FLOAT64", "celsius", "celsius", "identity", "n/a"),
+            new SimVarDefinition("itt2DegreesCelsius", "TURB ENG ITT:2", 2, "celsius", "FLOAT64", "celsius", "celsius", "identity", "n/a"),
+            new SimVarDefinition("antiIce1Enabled", "ENG ANTI ICE:1", 1, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("antiIce2Enabled", "ENG ANTI ICE:2", 2, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("exitOpen", "EXIT OPEN", null, "percent over 100", "FLOAT64", "0..1", "bool", "> 0", "0..1"),
+            new SimVarDefinition("apuPctRpm", "APU PCT RPM", null, "percent over 100", "FLOAT64", "0..100", "status input", "APU status", "0..100"),
+            new SimVarDefinition("apuSwitch", "APU SWITCH", null, "bool", "FLOAT64", "bool", "status input", "APU status", "0|1"),
+            new SimVarDefinition("apuGeneratorActive", "APU GENERATOR ACTIVE:1", 1, "bool", "FLOAT64", "bool", "status input", "APU status", "0|1")
+        };
+
+        private static readonly SimVarDefinition[] AutopilotDefinitions =
+        {
+            new SimVarDefinition("barometerSettingMillibars", "KOHLSMAN SETTING MB:1", 1, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "80000..110000"),
+            new SimVarDefinition("yawDamperEnabled", "AUTOPILOT YAW DAMPER", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("flightDirectorEnabled", "AUTOPILOT FLIGHT DIRECTOR ACTIVE", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("autopilotAirspeedHoldKnots", "AUTOPILOT AIRSPEED HOLD VAR", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..250"),
+            new SimVarDefinition("autopilotMachHoldMach", "AUTOPILOT MACH HOLD VAR", null, "mach", "FLOAT64", "mach", "mach", "identity", "0..1.2"),
+            new SimVarDefinition("autopilotAltitudeHoldFeet", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "meters", "feet * 0.3048", "n/a"),
+            new SimVarDefinition("autopilotHeadingLockDegrees", "AUTOPILOT HEADING LOCK DIR", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", "0..360"),
+            new SimVarDefinition("autopilotPitchHoldRadians", "AUTOPILOT PITCH HOLD REF", null, "radians", "FLOAT64", "radians", "degrees", "rad * 57.2957795", "n/a"),
+            new SimVarDefinition("autopilotVerticalSpeedHoldFeetPerMinute", "AUTOPILOT VERTICAL HOLD VAR", null, "feet per minute", "FLOAT64", "ft/min", "m/s", "ft/min * 0.00508", "n/a"),
+            new SimVarDefinition("autopilotAltitudeHoldActive", "AUTOPILOT ALTITUDE LOCK", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("autopilotHeadingLockActive", "AUTOPILOT HEADING LOCK", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("autopilotAirspeedHoldActive", "AUTOPILOT AIRSPEED HOLD", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("autopilotMachHoldActive", "AUTOPILOT MACH HOLD", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
+            new SimVarDefinition("autopilotVerticalSpeedHoldActive", "AUTOPILOT VERTICAL HOLD", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1")
+        };
 
         private static readonly HttpClient http = new HttpClient
         {
@@ -807,24 +994,51 @@ namespace SimpleSimConnector
             Log("Connected to MSFS.");
             SetStatus("Connected to MSFS. Requesting telemetry...");
             identityDefinitionNames.Clear();
-            telemetryDefinitionNames.Clear();
+            coreFlightDefinitionNames.Clear();
+            weatherDefinitionNames.Clear();
+            radioDefinitionNames.Clear();
+            fuelDefinitionNames.Clear();
+            engineDefinitionNames.Clear();
+            autopilotDefinitionNames.Clear();
             latestAircraftTitle = "";
+            latestIdentityData = null;
+            latestAircraftIdentity = AircraftAdapterFactory.ResolveIdentity("", "", "", "");
+            activeAircraftAdapter = new GenericAircraftAdapter();
+            latestCoreFlightData = null;
+            latestWeatherData = null;
+            latestRadioData = null;
+            latestFuelData = null;
+            latestEngineData = null;
+            latestAutopilotData = null;
+            fenixRequestIdToVarName.Clear();
+            fenixDefinitionIdToVarName.Clear();
+            fenixLvarValues.Clear();
+            fenixReadableVarNames.Clear();
+            fenixDiscoveredVarSet.Clear();
+            fenixDiscoveredVars.Clear();
+            fenixCockpitBehaviorPath = "";
+            fenixPackagePath = "";
 
             TelemetryBridgeCatalog.ValidateStructOrder<IdentityData>(TelemetryBridgeCatalog.IdentityDefinitions);
-            TelemetryBridgeCatalog.ValidateStructOrder<Telemetry>(TelemetryBridgeCatalog.NumericDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<CoreFlightData>(CoreFlightDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<WeatherData>(WeatherDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<RadioData>(RadioDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<FuelData>(FuelDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<EngineData>(EngineDefinitions);
+            TelemetryBridgeCatalog.ValidateStructOrder<AutopilotData>(AutopilotDefinitions);
 
             foreach (SimVarDefinition definition in TelemetryBridgeCatalog.IdentityDefinitions)
             {
                 AddDefinition(DEFINITIONS.Identity, identityDefinitionNames, definition);
             }
 
-            foreach (SimVarDefinition definition in TelemetryBridgeCatalog.NumericDefinitions)
-            {
-                AddDefinition(DEFINITIONS.Telemetry, telemetryDefinitionNames, definition);
-            }
-
             simconnect.RegisterDataDefineStruct<IdentityData>(DEFINITIONS.Identity);
-            simconnect.RegisterDataDefineStruct<Telemetry>(DEFINITIONS.Telemetry);
+            RegisterDefinitionGroup(DEFINITIONS.CoreFlight, CoreFlightDefinitions, coreFlightDefinitionNames, typeof(CoreFlightData));
+            RegisterDefinitionGroup(DEFINITIONS.Weather, WeatherDefinitions, weatherDefinitionNames, typeof(WeatherData));
+            RegisterDefinitionGroup(DEFINITIONS.Radio, RadioDefinitions, radioDefinitionNames, typeof(RadioData));
+            RegisterDefinitionGroup(DEFINITIONS.Fuel, FuelDefinitions, fuelDefinitionNames, typeof(FuelData));
+            RegisterDefinitionGroup(DEFINITIONS.Engine, EngineDefinitions, engineDefinitionNames, typeof(EngineData));
+            RegisterDefinitionGroup(DEFINITIONS.Autopilot, AutopilotDefinitions, autopilotDefinitionNames, typeof(AutopilotData));
             simconnect.SubscribeToSystemEvent(EVENTS.Frame, "Frame");
 
             simconnect.RequestDataOnSimObject(
@@ -838,16 +1052,12 @@ namespace SimpleSimConnector
                 0
             );
 
-            simconnect.RequestDataOnSimObject(
-                REQUESTS.Telemetry,
-                DEFINITIONS.Telemetry,
-                SimConnect.SIMCONNECT_OBJECT_ID_USER,
-                SIMCONNECT_PERIOD.SECOND,
-                SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
-                0,
-                0,
-                0
-            );
+            RequestDefinitionGroup(REQUESTS.CoreFlight, DEFINITIONS.CoreFlight, SIMCONNECT_PERIOD.SECOND);
+            RequestDefinitionGroup(REQUESTS.Weather, DEFINITIONS.Weather, SIMCONNECT_PERIOD.SECOND);
+            RequestDefinitionGroup(REQUESTS.Radio, DEFINITIONS.Radio, SIMCONNECT_PERIOD.SECOND);
+            RequestDefinitionGroup(REQUESTS.Fuel, DEFINITIONS.Fuel, SIMCONNECT_PERIOD.SECOND);
+            RequestDefinitionGroup(REQUESTS.Engine, DEFINITIONS.Engine, SIMCONNECT_PERIOD.SECOND);
+            RequestDefinitionGroup(REQUESTS.Autopilot, DEFINITIONS.Autopilot, SIMCONNECT_PERIOD.SECOND);
 
             Log("Telemetry request started.");
             SetStatus("Connected. Telemetry request started.");
@@ -867,6 +1077,61 @@ namespace SimpleSimConnector
             );
         }
 
+        private void RegisterDefinitionGroup(
+            DEFINITIONS target,
+            SimVarDefinition[] definitions,
+            List<string> definitionNames,
+            Type structType)
+        {
+            foreach (SimVarDefinition definition in definitions)
+            {
+                AddDefinition(target, definitionNames, definition);
+            }
+
+            if (structType == typeof(CoreFlightData))
+            {
+                simconnect.RegisterDataDefineStruct<CoreFlightData>(target);
+            }
+            else if (structType == typeof(WeatherData))
+            {
+                simconnect.RegisterDataDefineStruct<WeatherData>(target);
+            }
+            else if (structType == typeof(RadioData))
+            {
+                simconnect.RegisterDataDefineStruct<RadioData>(target);
+            }
+            else if (structType == typeof(FuelData))
+            {
+                simconnect.RegisterDataDefineStruct<FuelData>(target);
+            }
+            else if (structType == typeof(EngineData))
+            {
+                simconnect.RegisterDataDefineStruct<EngineData>(target);
+            }
+            else if (structType == typeof(AutopilotData))
+            {
+                simconnect.RegisterDataDefineStruct<AutopilotData>(target);
+            }
+            else
+            {
+                throw new InvalidOperationException("Unsupported SimConnect struct type: " + structType.FullName);
+            }
+        }
+
+        private void RequestDefinitionGroup(REQUESTS request, DEFINITIONS definition, SIMCONNECT_PERIOD period)
+        {
+            simconnect.RequestDataOnSimObject(
+                request,
+                definition,
+                SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                period,
+                SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0,
+                0,
+                0
+            );
+        }
+
         private void OnFrameEvent(SimConnect sender, SIMCONNECT_RECV_EVENT_FRAME data)
         {
             latestFrameRate = data.fFrameRate;
@@ -875,35 +1140,84 @@ namespace SimpleSimConnector
 
         private async void OnTelemetryReceived(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data)
         {
-            REQUESTS request = (REQUESTS)data.dwRequestID;
-
-            if (request == REQUESTS.Identity)
-            {
-                try
-                {
-                    var identity = (IdentityData)data.dwData[0];
-                    latestAircraftTitle = Clean(identity.title);
-                }
-                catch (Exception ex)
-                {
-                    Log("Identity handling error: " + ex.Message);
-                }
-
-                return;
-            }
-
-            if (request != REQUESTS.Telemetry)
-            {
-                return;
-            }
+            int rawRequestId = unchecked((int)data.dwRequestID);
 
             try
             {
-                var telemetry = (Telemetry)data.dwData[0];
+                string fenixVarName;
+                if (fenixRequestIdToVarName.TryGetValue(rawRequestId, out fenixVarName))
+                {
+                    var lvarValue = (SingleValueData)data.dwData[0];
+                    fenixLvarValues[fenixVarName] = lvarValue.value;
+                    if (TelemetryMath.IsFinite(lvarValue.value))
+                    {
+                        fenixReadableVarNames.Add(fenixVarName);
+                    }
+                    return;
+                }
+
+                REQUESTS request = (REQUESTS)data.dwRequestID;
+
+                if (request == REQUESTS.Identity)
+                {
+                    var identity = (IdentityData)data.dwData[0];
+                    latestIdentityData = identity;
+                    latestAircraftTitle = Clean(identity.title);
+                    latestAircraftIdentity = BuildAircraftIdentity(identity);
+                    activeAircraftAdapter = AircraftAdapterFactory.ResolveAdapter(latestAircraftIdentity);
+                    EnsureFenixLvarRequests();
+                    return;
+                }
+
+                if (request == REQUESTS.CoreFlight)
+                {
+                    latestCoreFlightData = (CoreFlightData)data.dwData[0];
+                }
+                else if (request == REQUESTS.Weather)
+                {
+                    latestWeatherData = (WeatherData)data.dwData[0];
+                    return;
+                }
+                else if (request == REQUESTS.Radio)
+                {
+                    latestRadioData = (RadioData)data.dwData[0];
+                    return;
+                }
+                else if (request == REQUESTS.Fuel)
+                {
+                    latestFuelData = (FuelData)data.dwData[0];
+                    return;
+                }
+                else if (request == REQUESTS.Engine)
+                {
+                    latestEngineData = (EngineData)data.dwData[0];
+                    return;
+                }
+                else if (request == REQUESTS.Autopilot)
+                {
+                    latestAutopilotData = (AutopilotData)data.dwData[0];
+                    return;
+                }
+                else
+                {
+                    return;
+                }
+
+                CoreFlightData coreFlight = latestCoreFlightData.Value;
+                WeatherData weather = latestWeatherData ?? CreateUnavailableWeatherData();
+                RadioData radios = latestRadioData ?? CreateUnavailableRadioData();
+                FuelData fuel = latestFuelData ?? CreateUnavailableFuelData();
+                EngineData engine = latestEngineData ?? CreateUnavailableEngineData();
+                AutopilotData autopilot = latestAutopilotData ?? CreateUnavailableAutopilotData();
 
                 string json = BuildBackendJson(
-                    telemetry,
-                    latestAircraftTitle,
+                    coreFlight,
+                    weather,
+                    radios,
+                    fuel,
+                    engine,
+                    autopilot,
+                    latestIdentityData ?? new IdentityData(),
                     connected: true,
                     lastError: null
                 );
@@ -918,7 +1232,7 @@ namespace SimpleSimConnector
                     AppendTelemetry(json);
                 }
 
-                UpdateLatestLabel(telemetry);
+                UpdateLatestLabel(coreFlight);
 
                 await PostToBackend(json);
             }
@@ -987,15 +1301,10 @@ namespace SimpleSimConnector
             string message = "SimConnect exception: " + data.dwException;
             if (data.dwIndex > 0)
             {
-                int definitionIndex = (int)data.dwIndex - 1;
-                if (definitionIndex >= 0 && definitionIndex < telemetryDefinitionNames.Count)
-                {
-                    message += " at telemetry definition #" + data.dwIndex + " (" + telemetryDefinitionNames[definitionIndex] + ")";
-                }
-                else
-                {
-                    message += " at telemetry definition #" + data.dwIndex;
-                }
+                string definitionName = FindDefinitionName((int)data.dwIndex);
+                message += definitionName != null
+                    ? " at telemetry definition #" + data.dwIndex + " (" + definitionName + ")"
+                    : " at telemetry definition #" + data.dwIndex;
             }
 
             if (data.dwSendID > 0)
@@ -1078,6 +1387,179 @@ namespace SimpleSimConnector
             simconnect = null;
         }
 
+        private AircraftIdentityInfo BuildAircraftIdentity(IdentityData identityData)
+        {
+            string provisionalPackagePath = ResolveAircraftPackagePath(identityData);
+            AircraftIdentityInfo identity = AircraftAdapterFactory.ResolveIdentity(
+                Clean(identityData.title),
+                Clean(identityData.atcModel),
+                Clean(identityData.atcType),
+                provisionalPackagePath);
+
+            if (string.IsNullOrWhiteSpace(identity.PackagePath))
+            {
+                identity.PackagePath = provisionalPackagePath;
+            }
+
+            latestAircraftIdentity = identity;
+            return identity;
+        }
+
+        private string ResolveAircraftPackagePath(IdentityData identityData)
+        {
+            AircraftIdentityInfo baseIdentity = AircraftAdapterFactory.ResolveIdentity(
+                Clean(identityData.title),
+                Clean(identityData.atcModel),
+                Clean(identityData.atcType),
+                "");
+
+            if (!string.Equals(baseIdentity.DetectedFamily, "Fenix A32x", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
+
+            string appDataPackagesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft Flight Simulator 2024",
+                "Packages",
+                "Community");
+
+            string preferredPackage = "";
+            if (string.Equals(baseIdentity.DetectedVariant, "A320", StringComparison.OrdinalIgnoreCase))
+            {
+                preferredPackage = Path.Combine(appDataPackagesRoot, "fnx-aircraft-320");
+            }
+            else if (string.Equals(baseIdentity.DetectedVariant, "A319", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(baseIdentity.DetectedVariant, "A321", StringComparison.OrdinalIgnoreCase))
+            {
+                preferredPackage = Path.Combine(appDataPackagesRoot, "fnx-aircraft-319-321");
+            }
+
+            if (preferredPackage.Length > 0 && Directory.Exists(preferredPackage))
+            {
+                return preferredPackage;
+            }
+
+            string fallback320 = Path.Combine(appDataPackagesRoot, "fnx-aircraft-320");
+            if (Directory.Exists(fallback320))
+            {
+                return fallback320;
+            }
+
+            string fallback319321 = Path.Combine(appDataPackagesRoot, "fnx-aircraft-319-321");
+            if (Directory.Exists(fallback319321))
+            {
+                return fallback319321;
+            }
+
+            return "";
+        }
+
+        private void EnsureFenixLvarRequests()
+        {
+            if (!(activeAircraftAdapter is FenixA32xAdapter) || simconnect == null || fenixRequestIdToVarName.Count > 0)
+            {
+                return;
+            }
+
+            fenixPackagePath = latestAircraftIdentity != null ? Clean(latestAircraftIdentity.PackagePath) : "";
+            fenixCockpitBehaviorPath = FindFenixCockpitBehaviorPath(latestAircraftIdentity);
+
+            FenixVariableDiscoveryResult discovery = FenixVariableDiscovery.DiscoverFromXml(fenixCockpitBehaviorPath);
+            fenixDiscoveredVars.Clear();
+            fenixDiscoveredVarSet.Clear();
+
+            foreach (string variable in discovery.CandidateVariables)
+            {
+                fenixDiscoveredVars.Add(variable);
+                fenixDiscoveredVarSet.Add(variable);
+            }
+
+            Log("Fenix cockpit behavior path: " + (discovery.CockpitBehaviorPath ?? ""));
+            if (fenixDiscoveredVars.Count > 0)
+            {
+                Log("Fenix candidate VAR_NAME list (" + fenixDiscoveredVars.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", fenixDiscoveredVars.ToArray()));
+            }
+            else
+            {
+                Log("Fenix candidate VAR_NAME list is empty.");
+            }
+
+            IList<string> requestedVariables = FenixA32xAdapter.GetRequestedVariables(fenixDiscoveredVarSet);
+            for (int i = 0; i < requestedVariables.Count; i++)
+            {
+                RegisterFenixLvarDefinition(requestedVariables[i], i);
+            }
+
+            Log("Fenix requested LVars (" + requestedVariables.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", requestedVariables));
+        }
+
+        private string FindFenixCockpitBehaviorPath(AircraftIdentityInfo identity)
+        {
+            var candidates = new List<string>();
+
+            if (identity != null && !string.IsNullOrWhiteSpace(identity.PackagePath))
+            {
+                candidates.Add(Path.Combine(
+                    identity.PackagePath,
+                    "SimObjects",
+                    "Airplanes",
+                    "FNX_32X",
+                    "attachments",
+                    "fnx",
+                    "Part_Interior_Cockpit",
+                    "model",
+                    "Cockpit_Behavior.xml"));
+            }
+
+            string appDataPackagesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft Flight Simulator 2024",
+                "Packages",
+                "Community");
+
+            candidates.Add(Path.Combine(appDataPackagesRoot, "fnx-aircraft-320", "SimObjects", "Airplanes", "FNX_32X", "attachments", "fnx", "Part_Interior_Cockpit", "model", "Cockpit_Behavior.xml"));
+            candidates.Add(Path.Combine(appDataPackagesRoot, "fnx-aircraft-319-321", "SimObjects", "Airplanes", "FNX_32X", "attachments", "fnx", "Part_Interior_Cockpit", "model", "Cockpit_Behavior.xml"));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (File.Exists(candidates[i]))
+                {
+                    return candidates[i];
+                }
+            }
+
+            return "";
+        }
+
+        private void RegisterFenixLvarDefinition(string varName, int index)
+        {
+            int definitionId = FenixDefinitionBase + index;
+            int requestId = FenixRequestBase + index;
+
+            fenixDefinitionIdToVarName[definitionId] = varName;
+            fenixRequestIdToVarName[requestId] = varName;
+
+            simconnect.AddToDataDefinition(
+                (DEFINITIONS)definitionId,
+                "L:" + varName,
+                "number",
+                SIMCONNECT_DATATYPE.FLOAT64,
+                0,
+                SimConnect.SIMCONNECT_UNUSED);
+
+            simconnect.RegisterDataDefineStruct<SingleValueData>((DEFINITIONS)definitionId);
+            simconnect.RequestDataOnSimObject(
+                (REQUESTS)requestId,
+                (DEFINITIONS)definitionId,
+                SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.SECOND,
+                SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0,
+                0,
+                0);
+        }
+
         private string BuildStatusJson(bool connectedToSimulator, string lastError)
         {
             var sb = new StringBuilder(2048);
@@ -1128,17 +1610,17 @@ namespace SimpleSimConnector
             sb.Append("\"engineType\":null,");
             sb.Append("\"engines\":[{\"ittDegreesCelsius\":null,\"antiIce\":{\"antiIceEnabled\":null}},{\"ittDegreesCelsius\":null,\"antiIce\":{\"antiIceEnabled\":null}}],");
             sb.Append("\"fuelTanks\":[");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER\",\"capacityKgs\":null},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER_2\",\"capacityKgs\":null},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER_3\"},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER_2\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_CENTER_3\",\"capacityKgs\":null,\"percentageFilled\":null},");
             sb.Append("{\"position\":\"FUEL_TANK_POSITION_LEFT_MAIN\",\"capacityKgs\":null,\"percentageFilled\":null},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_LEFT_AUX\"},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_LEFT_TIP\"},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_LEFT_AUX\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_LEFT_TIP\",\"capacityKgs\":null,\"percentageFilled\":null},");
             sb.Append("{\"position\":\"FUEL_TANK_POSITION_RIGHT_MAIN\",\"capacityKgs\":null,\"percentageFilled\":null},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_RIGHT_AUX\"},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_RIGHT_TIP\"},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_EXTERNAL_1\"},");
-            sb.Append("{\"position\":\"FUEL_TANK_POSITION_EXTERNAL_2\"}");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_RIGHT_AUX\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_RIGHT_TIP\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_EXTERNAL_1\",\"capacityKgs\":null,\"percentageFilled\":null},");
+            sb.Append("{\"position\":\"FUEL_TANK_POSITION_EXTERNAL_2\",\"capacityKgs\":null,\"percentageFilled\":null}");
             sb.Append("],");
             sb.Append("\"outsideAirTemperatureCelsius\":null,");
             sb.Append("\"visibilityKm\":null,");
@@ -1147,55 +1629,192 @@ namespace SimpleSimConnector
             sb.Append("\"ambientPressurePascal\":null,");
             sb.Append("\"seaLevelPressurePascal\":null,");
             sb.Append("\"barometerSettingPascal\":null,");
-            sb.Append("\"apu\":{\"status\":\"\"},");
+            sb.Append("\"apu\":{\"status\":null,\"source\":null},");
             sb.Append("\"pressurization\":{\"cabinAltitudeMeters\":null},");
             sb.Append("\"flightControls\":{\"yawDamperEnabled\":[null]},");
-            sb.Append("\"autopilot\":{\"flightDirectorEnabled\":null,\"modes\":[],\"airspeedHoldMetersPerSecond\":null,\"machHoldMach\":null,\"altitudeHoldMeters\":null,\"altitudeArmMeters\":null,\"headingLockDegrees\":null,\"pitchHoldDegrees\":null,\"verticalSpeedHoldMetersPerSecond\":null},");
+            sb.Append("\"autopilot\":{\"source\":null,\"flightDirectorEnabled\":null,\"flightDirector1Enabled\":null,\"flightDirector2Enabled\":null,\"modes\":[],\"airspeedHoldMetersPerSecond\":null,\"machHoldMach\":null,\"altitudeHoldMeters\":null,\"altitudeArmMeters\":null,\"headingLockDegrees\":null,\"pitchHoldDegrees\":null,\"verticalSpeedHoldMetersPerSecond\":null,\"ap1Engaged\":null,\"ap2Engaged\":null,\"autoThrottleArmed\":null,\"autoThrottleActive\":null,\"selectedSpeedMetersPerSecond\":null,\"selectedMach\":null,\"selectedHeadingDegrees\":null,\"selectedAltitudeMeters\":null,\"selectedVerticalSpeedMetersPerSecond\":null,\"lateralMode\":null,\"verticalMode\":null,\"managedSpeed\":null,\"managedLateral\":null,\"managedVertical\":null},");
             sb.Append("\"aircraftInformation\":{\"simulatorPath\":\"\",\"packagePath\":\"\",\"version\":\"1.1.0\"},");
-            sb.Append("\"diagnostics\":{\"rejected\":[]}");
+            sb.Append("\"diagnostics\":{\"rejected\":[],\"warnings\":[],\"aircraftAdapter\":\"GenericAircraftAdapter\",\"fenixDetected\":false,\"fenixLvarSource\":\"unavailable\",\"fenixVariablesDiscovered\":0,\"fenixVariablesReadable\":0,\"identity\":{\"title\":null,\"atcModel\":null,\"atcType\":null,\"simObjectTitle\":null,\"packagePath\":null,\"detectedFamily\":\"Generic\",\"detectedVariant\":\"UNKNOWN\"},\"systems\":{\"apu\":{\"genericValue\":null,\"fenixRaw\":{},\"selected\":null,\"reason\":null},\"flightDirector\":{\"genericValue\":null,\"fenixRaw\":{\"fd1\":null,\"fd2\":null},\"selected\":null,\"reason\":null},\"autopilot\":{\"genericModes\":[],\"fenixRaw\":{},\"selectedSource\":null}}}");
             sb.Append("}");
             return sb.ToString();
         }
 
-        private string BuildBackendJson(Telemetry t, string aircraftTitle, bool connected, string lastError)
+        private string BuildBackendJson(
+            CoreFlightData core,
+            WeatherData weather,
+            RadioData radios,
+            FuelData fuel,
+            EngineData engine,
+            AutopilotData autopilot,
+            IdentityData identityData,
+            bool connected,
+            string lastError)
         {
             var rejected = new List<TelemetryRejectedValue>();
+            var warnings = new List<TelemetryDiagnosticWarning>();
+
+            AircraftIdentityInfo identity = BuildAircraftIdentity(identityData);
             string callsign = BuildCallsign();
-            string aircraftShort = BuildAircraftShort(aircraftTitle);
-            double? latitude = TelemetryMath.ValidateNumeric("latitude", t.latitude, t.latitude, rejected);
-            double? longitude = TelemetryMath.ValidateNumeric("longitude", t.longitude, t.longitude, rejected);
-            double? altitudeMeters = TelemetryMath.ValidateNumeric("altitudeMeters", t.altitudeMeters, t.altitudeMeters, rejected);
-            double convertedGroundspeed = TelemetryMath.KnotsToMetersPerSecond(t.groundSpeedMetersPerSecond);
-            double? groundspeed = TelemetryMath.ValidateNumeric("groundSpeedMetersPerSecond", t.groundSpeedMetersPerSecond, ZeroNoise(convertedGroundspeed, 0.01), rejected);
-            double? heading = TelemetryMath.ValidateNumeric("headingTrueDegrees", t.headingTrueDegrees, NormalizeHeading(t.headingTrueDegrees), rejected);
-            double? headingMagnetic = TelemetryMath.ValidateNumeric("headingMagneticDegrees", t.headingMagneticDegrees, NormalizeHeading(t.headingMagneticDegrees), rejected);
-            double convertedVerticalSpeed = TelemetryMath.FeetPerSecondToMetersPerSecond(t.verticalSpeedMetersPerSecond);
-            double? verticalSpeed = TelemetryMath.ValidateNumeric("verticalSpeedMetersPerSecond", t.verticalSpeedMetersPerSecond, ZeroNoise(convertedVerticalSpeed, 0.001), rejected);
-            string engineType = MapEngineType(t.engineType, aircraftShort);
+            string aircraftShort = BuildAircraftShort(identity);
             string simulator = "Microsoft Flight Simulator";
-            List<string> autopilotModes = BuildAutopilotModes(t);
-            string apuStatus = BuildApuStatus(t);
-            string flightDirectorEnabled = JsonBoolOrNull(t.flightDirectorEnabled);
-            double? visibilityKm = TelemetryMath.ValidateNumeric("visibilityKm", t.visibilityMeters, TelemetryMath.MetersToKilometers(t.visibilityMeters), rejected);
-            double? windSpeedMetersPerSecond = TelemetryMath.ValidateNumeric("windSpeedMetersPerSecond", t.windSpeedKnots, TelemetryMath.KnotsToMetersPerSecond(t.windSpeedKnots), rejected);
-            double? windDirectionDegrees = TelemetryMath.ValidateNumeric("windDirectionDegrees", t.windDirectionDegrees, NormalizeHeading(t.windDirectionDegrees), rejected);
-            double? ambientPressurePascal = TelemetryMath.ValidateNumeric("ambientPressurePascal", t.ambientPressureInchesHg, TelemetryMath.InchesHgToPascals(t.ambientPressureInchesHg), rejected);
-            double? seaLevelPressurePascal = TelemetryMath.ValidateNumeric("seaLevelPressurePascal", t.seaLevelPressurePascal, TelemetryMath.MillibarsToPascals(t.seaLevelPressurePascal), rejected);
-            double? barometerSettingPascal = TelemetryMath.ValidateNumeric("barometerSettingPascal", t.barometerSettingMillibars, TelemetryMath.MillibarsToPascals(t.barometerSettingMillibars), rejected);
-            double? outsideAirTemperatureCelsius = TelemetryMath.ValidateNumeric("outsideAirTemperatureCelsius", t.outsideAirTemperatureCelsius, t.outsideAirTemperatureCelsius, rejected);
-            double? autopilotAirspeedHoldMetersPerSecond = TelemetryMath.ValidateNumeric("autopilot.airspeedHoldMetersPerSecond", t.autopilotAirspeedHoldKnots, TelemetryMath.KnotsToMetersPerSecond(t.autopilotAirspeedHoldKnots), rejected);
-            double? autopilotMachHoldMach = TelemetryMath.ValidateNumeric("autopilot.machHoldMach", t.autopilotMachHoldMach, t.autopilotMachHoldMach, rejected);
-            double? autopilotAltitudeHoldMeters = TelemetryMath.ValidateNumeric("autopilot.altitudeHoldMeters", t.autopilotAltitudeHoldFeet, TelemetryMath.FeetToMeters(t.autopilotAltitudeHoldFeet), rejected);
-            double? autopilotHeadingLockDegrees = TelemetryMath.ValidateNumeric("autopilot.headingLockDegrees", t.autopilotHeadingLockDegrees, NormalizeHeading(t.autopilotHeadingLockDegrees), rejected);
-            double? autopilotPitchHoldDegrees = TelemetryMath.ValidateNumeric("autopilot.pitchHoldDegrees", t.autopilotPitchHoldRadians, TelemetryMath.RadiansToDegrees(t.autopilotPitchHoldRadians), rejected);
-            double? autopilotVerticalSpeedHoldMetersPerSecond = TelemetryMath.ValidateNumeric("autopilot.verticalSpeedHoldMetersPerSecond", t.autopilotVerticalSpeedHoldFeetPerMinute, TelemetryMath.FeetPerMinuteToMetersPerSecond(t.autopilotVerticalSpeedHoldFeetPerMinute), rejected);
-            double? indicatedAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("indicatedAirspeedMetersPerSecond", t.indicatedAirspeedMetersPerSecond, TelemetryMath.KnotsToMetersPerSecond(t.indicatedAirspeedMetersPerSecond), rejected);
-            double? trueAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("trueAirspeedMetersPerSecond", t.trueAirspeedMetersPerSecond, TelemetryMath.KnotsToMetersPerSecond(t.trueAirspeedMetersPerSecond), rejected);
-            double? barberPoleAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("barberPoleAirspeedMetersPerSecond", t.barberPoleAirspeedMetersPerSecond, TelemetryMath.KnotsToMetersPerSecond(t.barberPoleAirspeedMetersPerSecond), rejected);
-            string com1 = TelemetryMath.ValidateFrequencyString("com1", t.com1Frequency, TelemetryMath.FormatComFrequencyBcd16(t.com1Frequency), rejected);
-            string com2 = TelemetryMath.ValidateFrequencyString("com2", t.com2Frequency, TelemetryMath.FormatComFrequencyBcd16(t.com2Frequency), rejected);
-            string nav1 = TelemetryMath.ValidateFrequencyString("nav1", t.nav1Frequency, TelemetryMath.FormatFrequency(t.nav1Frequency), rejected);
-            string nav2 = TelemetryMath.ValidateFrequencyString("nav2", t.nav2Frequency, TelemetryMath.FormatFrequency(t.nav2Frequency), rejected);
+
+            double? latitude = TelemetryMath.ValidateNumeric("latitude", core.latitude, core.latitude, rejected);
+            double? longitude = TelemetryMath.ValidateNumeric("longitude", core.longitude, core.longitude, rejected);
+            double? altitudeMeters = TelemetryMath.ValidateNumeric("altitudeMeters", core.altitudeMeters, core.altitudeMeters, rejected);
+            double? groundspeed = TelemetryMath.ValidateNumeric("groundSpeedMetersPerSecond", core.groundSpeedKnots, ZeroNoise(TelemetryMath.KnotsToMetersPerSecond(core.groundSpeedKnots), 0.01), rejected);
+            double? heading = TelemetryMath.ValidateNumeric("headingTrueDegrees", core.headingTrueDegrees, NormalizeHeading(core.headingTrueDegrees), rejected);
+            double? headingMagnetic = TelemetryMath.ValidateNumeric("headingMagneticDegrees", core.headingMagneticDegrees, NormalizeHeading(core.headingMagneticDegrees), rejected);
+            double? verticalSpeed = TelemetryMath.ValidateNumeric("verticalSpeedMetersPerSecond", core.verticalSpeedFeetPerSecond, ZeroNoise(TelemetryMath.FeetPerSecondToMetersPerSecond(core.verticalSpeedFeetPerSecond), 0.001), rejected);
+            double? indicatedAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("indicatedAirspeedMetersPerSecond", core.indicatedAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.indicatedAirspeedKnots), rejected);
+            double? trueAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("trueAirspeedMetersPerSecond", core.trueAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.trueAirspeedKnots), rejected);
+            double? barberPoleAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("barberPoleAirspeedMetersPerSecond", core.barberPoleAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.barberPoleAirspeedKnots), rejected);
+
+            double? outsideAirTemperatureCelsius = TelemetryMath.ValidateNumeric("outsideAirTemperatureCelsius", weather.outsideAirTemperatureCelsius, weather.outsideAirTemperatureCelsius, rejected);
+            double? ambientPressurePascal = TelemetryMath.ValidateNumeric("ambientPressurePascal", weather.ambientPressureInchesHg, TelemetryMath.InchesHgToPascals(weather.ambientPressureInchesHg), rejected);
+            double? seaLevelPressurePascal = TelemetryMath.ValidateNumeric("seaLevelPressurePascal", weather.seaLevelPressureMillibars, TelemetryMath.MillibarsToPascals(weather.seaLevelPressureMillibars), rejected);
+            double? barometerSettingPascal = TelemetryMath.ValidateNumeric("barometerSettingPascal", autopilot.barometerSettingMillibars, TelemetryMath.MillibarsToPascals(autopilot.barometerSettingMillibars), rejected);
+            double? visibilityKm = TelemetryMath.ValidateNumeric("visibilityKm", weather.visibilityMeters, TelemetryMath.MetersToKilometers(weather.visibilityMeters), rejected);
+            double? windSpeedMetersPerSecond = TelemetryMath.ValidateNumeric("windSpeedMetersPerSecond", weather.windSpeedKnots, TelemetryMath.KnotsToMetersPerSecond(weather.windSpeedKnots), rejected);
+            double? windDirectionDegrees = TelemetryMath.ValidateNumeric("windDirectionDegrees", weather.windDirectionDegrees, NormalizeHeading(weather.windDirectionDegrees), rejected);
+
+            if (!outsideAirTemperatureCelsius.HasValue && TelemetryMath.IsFinite(weather.outsideAirTemperatureCelsius))
+            {
+                warnings.Add(new TelemetryDiagnosticWarning
+                {
+                    Code = "weather_struct_suspect",
+                    Message =
+                        "AMBIENT TEMPERATURE raw=" + TelemetryMath.FormatNumeric(weather.outsideAirTemperatureCelsius) +
+                        " ambientPressureRaw=" + TelemetryMath.FormatNumeric(weather.ambientPressureInchesHg) +
+                        " seaLevelPressureRaw=" + TelemetryMath.FormatNumeric(weather.seaLevelPressureMillibars) +
+                        " visibilityRaw=" + TelemetryMath.FormatNumeric(weather.visibilityMeters) +
+                        " windSpeedRaw=" + TelemetryMath.FormatNumeric(weather.windSpeedKnots) +
+                        " windDirectionRaw=" + TelemetryMath.FormatNumeric(weather.windDirectionDegrees)
+                });
+
+                Log("weather_struct_suspect raw packet: temp=" + TelemetryMath.FormatNumeric(weather.outsideAirTemperatureCelsius) +
+                    " ambientPressure=" + TelemetryMath.FormatNumeric(weather.ambientPressureInchesHg) +
+                    " seaLevelPressure=" + TelemetryMath.FormatNumeric(weather.seaLevelPressureMillibars) +
+                    " visibility=" + TelemetryMath.FormatNumeric(weather.visibilityMeters) +
+                    " windSpeed=" + TelemetryMath.FormatNumeric(weather.windSpeedKnots) +
+                    " windDirection=" + TelemetryMath.FormatNumeric(weather.windDirectionDegrees));
+            }
+
+            if (altitudeMeters.HasValue && altitudeMeters.Value > 100 &&
+                ambientPressurePascal.HasValue && seaLevelPressurePascal.HasValue &&
+                ambientPressurePascal.Value > seaLevelPressurePascal.Value)
+            {
+                warnings.Add(new TelemetryDiagnosticWarning
+                {
+                    Code = "pressure_mapping_suspicious",
+                    Message =
+                        "altitudeMeters=" + Num(altitudeMeters) +
+                        " ambientPressurePascal=" + Num(ambientPressurePascal) +
+                        " seaLevelPressurePascal=" + Num(seaLevelPressurePascal)
+                });
+                Log("pressure_mapping_suspicious altitude=" + Num(altitudeMeters) +
+                    " ambient=" + Num(ambientPressurePascal) +
+                    " seaLevel=" + Num(seaLevelPressurePascal));
+            }
+
+            string com1 = ResolveComFrequency("com1", "COM ACTIVE FREQUENCY:1", radios.com1Available, radios.com1Frequency, rejected);
+            string com2 = ResolveComFrequency("com2", "COM ACTIVE FREQUENCY:2", radios.com2Available, radios.com2Frequency, rejected);
+            string nav1 = ResolveNavFrequency("nav1", "NAV ACTIVE FREQUENCY:1", radios.nav1Available, radios.nav1Frequency, rejected);
+            string nav2 = ResolveNavFrequency("nav2", "NAV ACTIVE FREQUENCY:2", radios.nav2Available, radios.nav2Frequency, rejected);
+
+            double? validFuelWeightPerGallon = TelemetryMath.ValidateFuelWeightPerGallon(fuel.fuelWeightPerGallon, new List<TelemetryRejectedValue>());
+            if (!validFuelWeightPerGallon.HasValue)
+            {
+                int fuelDensityIndex = GetDefinitionIndex(FuelDefinitions, "fuelWeightPerGallon");
+                warnings.Add(new TelemetryDiagnosticWarning
+                {
+                    Code = "fuel_density_invalid",
+                    Message =
+                        "raw fuelWeightPerGallonLb=" + TelemetryMath.FormatNumeric(fuel.fuelWeightPerGallon) +
+                        " requestedUnit=pounds sourceField=FUEL WEIGHT PER GALLON structFieldIndex=" + fuelDensityIndex.ToString(CultureInfo.InvariantCulture)
+                });
+                Log("fuel_density_invalid raw=" + TelemetryMath.FormatNumeric(fuel.fuelWeightPerGallon) +
+                    " requestedUnit=pounds sourceField=FUEL WEIGHT PER GALLON structFieldIndex=" + fuelDensityIndex.ToString(CultureInfo.InvariantCulture));
+            }
+
+            string engineType = MapEngineType(engine.engineType, aircraftShort);
+            List<string> genericAutopilotModes = BuildAutopilotModes(autopilot);
+            string genericApuStatus = BuildApuStatus(engine);
+            bool? genericFlightDirectorEnabled = ToNullableBool(autopilot.flightDirectorEnabled);
+            double? genericAutopilotAirspeedHoldMetersPerSecond =
+                IsTruthy(autopilot.autopilotAirspeedHoldActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.airspeedHoldMetersPerSecond", autopilot.autopilotAirspeedHoldKnots, TelemetryMath.KnotsToMetersPerSecond(autopilot.autopilotAirspeedHoldKnots), rejected)
+                    : (double?)null;
+            double? genericAutopilotMachHoldMach =
+                IsTruthy(autopilot.autopilotMachHoldActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.machHoldMach", autopilot.autopilotMachHoldMach, autopilot.autopilotMachHoldMach, rejected)
+                    : (double?)null;
+            double? genericAutopilotAltitudeHoldMeters =
+                IsTruthy(autopilot.autopilotAltitudeHoldActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.altitudeHoldMeters", autopilot.autopilotAltitudeHoldFeet, TelemetryMath.FeetToMeters(autopilot.autopilotAltitudeHoldFeet), rejected)
+                    : (double?)null;
+            double? genericAutopilotHeadingLockDegrees =
+                IsTruthy(autopilot.autopilotHeadingLockActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.headingLockDegrees", autopilot.autopilotHeadingLockDegrees, NormalizeHeading(autopilot.autopilotHeadingLockDegrees), rejected)
+                    : (double?)null;
+            double? genericAutopilotPitchHoldDegrees =
+                IsTruthy(autopilot.autopilotVerticalSpeedHoldActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.pitchHoldDegrees", autopilot.autopilotPitchHoldRadians, TelemetryMath.RadiansToDegrees(autopilot.autopilotPitchHoldRadians), rejected)
+                    : (double?)null;
+            double? genericAutopilotVerticalSpeedHoldMetersPerSecond =
+                IsTruthy(autopilot.autopilotVerticalSpeedHoldActive)
+                    ? TelemetryMath.ValidateNumeric("autopilot.verticalSpeedHoldMetersPerSecond", autopilot.autopilotVerticalSpeedHoldFeetPerMinute, TelemetryMath.FeetPerMinuteToMetersPerSecond(autopilot.autopilotVerticalSpeedHoldFeetPerMinute), rejected)
+                    : (double?)null;
+
+            var genericSystems = new GenericSystemsData
+            {
+                ApuStatus = genericApuStatus,
+                YawDamperEnabled = ToNullableBool(autopilot.yawDamperEnabled),
+                FlightDirectorEnabled = genericFlightDirectorEnabled,
+                AutopilotModes = genericAutopilotModes,
+                AirspeedHoldMetersPerSecond = genericAutopilotAirspeedHoldMetersPerSecond,
+                MachHoldMach = genericAutopilotMachHoldMach,
+                AltitudeHoldMeters = genericAutopilotAltitudeHoldMeters,
+                HeadingLockDegrees = genericAutopilotHeadingLockDegrees,
+                PitchHoldDegrees = genericAutopilotPitchHoldDegrees,
+                VerticalSpeedHoldMetersPerSecond = genericAutopilotVerticalSpeedHoldMetersPerSecond
+            };
+
+            var adapterContext = new AircraftAdapterContext
+            {
+                Identity = identity,
+                Generic = genericSystems,
+                CustomVariableValues = fenixLvarValues,
+                DiscoveredVariables = fenixDiscoveredVarSet,
+                DiscoveredVariableCount = fenixDiscoveredVars.Count,
+                ReadableVariableCount = fenixReadableVarNames.Count,
+                CustomVariableSource = fenixReadableVarNames.Count > 0 ? "direct-simconnect" : "unavailable"
+            };
+
+            AircraftAdapterResult adapterResult = activeAircraftAdapter.Evaluate(adapterContext);
+            string apuStatus = adapterResult.Apu != null ? adapterResult.Apu.Status : genericApuStatus;
+            bool? yawDamperEnabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.YawDamperEnabled : genericSystems.YawDamperEnabled;
+            bool? flightDirectorEnabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirectorEnabled : genericFlightDirectorEnabled;
+            bool? flightDirector1Enabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirector1Enabled : null;
+            bool? flightDirector2Enabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirector2Enabled : null;
+            IList<string> autopilotModes = adapterResult.Autopilot != null ? adapterResult.Autopilot.Modes : genericAutopilotModes;
+            double? autopilotAirspeedHoldMetersPerSecond = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? adapterResult.Autopilot.SelectedSpeedMetersPerSecond
+                : genericAutopilotAirspeedHoldMetersPerSecond;
+            double? autopilotMachHoldMach = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? adapterResult.Autopilot.SelectedMach
+                : genericAutopilotMachHoldMach;
+            double? autopilotAltitudeHoldMeters = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? adapterResult.Autopilot.SelectedAltitudeMeters
+                : genericAutopilotAltitudeHoldMeters;
+            double? autopilotHeadingLockDegrees = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? adapterResult.Autopilot.SelectedHeadingDegrees
+                : genericAutopilotHeadingLockDegrees;
+            double? autopilotPitchHoldDegrees = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? null
+                : genericAutopilotPitchHoldDegrees;
+            double? autopilotVerticalSpeedHoldMetersPerSecond = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+                ? adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond
+                : genericAutopilotVerticalSpeedHoldMetersPerSecond;
 
             var sb = new StringBuilder(4096);
             sb.Append("{");
@@ -1228,52 +1847,52 @@ namespace SimpleSimConnector
             sb.Append("},");
             sb.Append("\"headingTrueDegrees\":").Append(Num(heading)).Append(",");
             sb.Append("\"headingMagneticDegrees\":").Append(Num(headingMagnetic)).Append(",");
-            sb.Append("\"gForce\":").Append(Num(t.gForce)).Append(",");
+            sb.Append("\"gForce\":").Append(Num(core.gForce)).Append(",");
             sb.Append("\"altitudeMeters\":").Append(Num(altitudeMeters)).Append(",");
-            sb.Append("\"pitchDegrees\":").Append(Num(t.pitchDegrees)).Append(",");
-            sb.Append("\"bankDegrees\":").Append(Num(t.bankDegrees)).Append(",");
-            sb.Append("\"groundElevationMeters\":").Append(Num(t.groundElevationMeters)).Append(",");
-            sb.Append("\"landingRateMetersPerSecond\":").Append(Num(t.landingRateMetersPerSecond)).Append(",");
-            sb.Append("\"onGround\":").Append(JsonBoolOrNull(t.onGround)).Append(",");
+            sb.Append("\"pitchDegrees\":").Append(Num(core.pitchDegrees)).Append(",");
+            sb.Append("\"bankDegrees\":").Append(Num(core.bankDegrees)).Append(",");
+            sb.Append("\"groundElevationMeters\":").Append(Num(core.groundElevationMeters)).Append(",");
+            sb.Append("\"landingRateMetersPerSecond\":").Append(Num(core.landingRateMetersPerSecond)).Append(",");
+            sb.Append("\"onGround\":").Append(JsonBoolOrNull(core.onGround)).Append(",");
             sb.Append("\"indicatedAirspeedMetersPerSecond\":").Append(Num(indicatedAirspeedMetersPerSecond)).Append(",");
             sb.Append("\"trueAirspeedMetersPerSecond\":").Append(Num(trueAirspeedMetersPerSecond)).Append(",");
             sb.Append("\"barberPoleAirspeedMetersPerSecond\":").Append(Num(barberPoleAirspeedMetersPerSecond)).Append(",");
             sb.Append("\"groundSpeedMetersPerSecond\":").Append(Num(groundspeed)).Append(",");
             sb.Append("\"verticalSpeedMetersPerSecond\":").Append(Num(verticalSpeed)).Append(",");
-            sb.Append("\"parkingBrake\":").Append(JsonBoolOrNull(t.parkingBrake)).Append(",");
-            sb.Append("\"numFlapPositions\":").Append(Num(t.numFlapPositions)).Append(",");
-            sb.Append("\"gearDown\":").Append(JsonBoolOrNull(t.gearDown)).Append(",");
-            sb.Append("\"doorsOpen\":").Append(JsonBoolOrNull(t.exitOpen)).Append(",");
+            sb.Append("\"parkingBrake\":").Append(JsonBoolOrNull(core.parkingBrake)).Append(",");
+            sb.Append("\"numFlapPositions\":").Append(Num(core.numFlapPositions)).Append(",");
+            sb.Append("\"gearDown\":").Append(JsonBoolOrNull(core.gearDown)).Append(",");
+            sb.Append("\"doorsOpen\":").Append(JsonBoolOrNull(engine.exitOpen)).Append(",");
             sb.Append("\"lights\":{");
-            sb.Append("\"navigation\":").Append(JsonBoolOrNull(t.lightNavigation)).Append(",");
-            sb.Append("\"beacon\":").Append(JsonBoolOrNull(t.lightBeacon)).Append(",");
-            sb.Append("\"strobes\":").Append(JsonBoolOrNull(t.lightStrobes)).Append(",");
-            sb.Append("\"instruments\":").Append(JsonBoolOrNull(t.lightInstruments)).Append(",");
-            sb.Append("\"logo\":").Append(JsonBoolOrNull(t.lightLogo)).Append(",");
-            sb.Append("\"cabin\":").Append(JsonBoolOrNull(t.lightCabin));
+            sb.Append("\"navigation\":").Append(JsonBoolOrNull(core.lightNavigation)).Append(",");
+            sb.Append("\"beacon\":").Append(JsonBoolOrNull(core.lightBeacon)).Append(",");
+            sb.Append("\"strobes\":").Append(JsonBoolOrNull(core.lightStrobes)).Append(",");
+            sb.Append("\"instruments\":").Append(JsonBoolOrNull(core.lightInstruments)).Append(",");
+            sb.Append("\"logo\":").Append(JsonBoolOrNull(core.lightLogo)).Append(",");
+            sb.Append("\"cabin\":").Append(JsonBoolOrNull(core.lightCabin));
             sb.Append("},");
             sb.Append("\"com1\":").Append(JsonStringOrNull(com1)).Append(",");
             sb.Append("\"com2\":").Append(JsonStringOrNull(com2)).Append(",");
             sb.Append("\"nav1\":").Append(JsonStringOrNull(nav1)).Append(",");
             sb.Append("\"nav2\":").Append(JsonStringOrNull(nav2)).Append(",");
-            sb.Append("\"transponder\":").Append(JsonStringOrNull(FormatTransponder(t.transponderCode))).Append(",");
+            sb.Append("\"transponder\":").Append(JsonStringOrNull(FormatTransponder(radios.transponderCode))).Append(",");
             sb.Append("\"engineType\":").Append(JsonStringOrNull(engineType)).Append(",");
             sb.Append("\"engines\":[");
-            sb.Append("{\"ittDegreesCelsius\":").Append(Num(t.itt1DegreesCelsius)).Append(",\"antiIce\":{\"antiIceEnabled\":").Append(JsonBoolOrNull(t.antiIce1Enabled)).Append("}},");
-            sb.Append("{\"ittDegreesCelsius\":").Append(Num(t.itt2DegreesCelsius)).Append(",\"antiIce\":{\"antiIceEnabled\":").Append(JsonBoolOrNull(t.antiIce2Enabled)).Append("}}");
+            sb.Append("{\"ittDegreesCelsius\":").Append(Num(engine.itt1DegreesCelsius)).Append(",\"antiIce\":{\"antiIceEnabled\":").Append(JsonBoolOrNull(engine.antiIce1Enabled)).Append("}},");
+            sb.Append("{\"ittDegreesCelsius\":").Append(Num(engine.itt2DegreesCelsius)).Append(",\"antiIce\":{\"antiIceEnabled\":").Append(JsonBoolOrNull(engine.antiIce2Enabled)).Append("}}");
             sb.Append("],");
             sb.Append("\"fuelTanks\":[");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER", t.fuelTankCenterCapacityGallons, t.fuelTankCenterQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER_2", t.fuelTankCenter2CapacityGallons, t.fuelTankCenter2QuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER_3", t.fuelTankCenter3CapacityGallons, t.fuelTankCenter3QuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_MAIN", t.fuelTankLeftMainCapacityGallons, t.fuelTankLeftMainQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_AUX", t.fuelTankLeftAuxCapacityGallons, t.fuelTankLeftAuxQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_TIP", t.fuelTankLeftTipCapacityGallons, t.fuelTankLeftTipQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_MAIN", t.fuelTankRightMainCapacityGallons, t.fuelTankRightMainQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_AUX", t.fuelTankRightAuxCapacityGallons, t.fuelTankRightAuxQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_TIP", t.fuelTankRightTipCapacityGallons, t.fuelTankRightTipQuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_EXTERNAL_1", t.fuelTankExternal1CapacityGallons, t.fuelTankExternal1QuantityGallons, t.fuelWeightPerGallon, rejected)).Append(",");
-            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_EXTERNAL_2", t.fuelTankExternal2CapacityGallons, t.fuelTankExternal2QuantityGallons, t.fuelWeightPerGallon, rejected));
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER", fuel.fuelTankCenterCapacityGallons, fuel.fuelTankCenterLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER_2", fuel.fuelTankCenter2CapacityGallons, fuel.fuelTankCenter2Level, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_CENTER_3", fuel.fuelTankCenter3CapacityGallons, fuel.fuelTankCenter3Level, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_MAIN", fuel.fuelTankLeftMainCapacityGallons, fuel.fuelTankLeftMainLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_AUX", fuel.fuelTankLeftAuxCapacityGallons, fuel.fuelTankLeftAuxLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_LEFT_TIP", fuel.fuelTankLeftTipCapacityGallons, fuel.fuelTankLeftTipLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_MAIN", fuel.fuelTankRightMainCapacityGallons, fuel.fuelTankRightMainLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_AUX", fuel.fuelTankRightAuxCapacityGallons, fuel.fuelTankRightAuxLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_RIGHT_TIP", fuel.fuelTankRightTipCapacityGallons, fuel.fuelTankRightTipLevel, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_EXTERNAL_1", fuel.fuelTankExternal1CapacityGallons, fuel.fuelTankExternal1Level, validFuelWeightPerGallon, rejected, warnings)).Append(",");
+            sb.Append(BuildFuelTankJson("FUEL_TANK_POSITION_EXTERNAL_2", fuel.fuelTankExternal2CapacityGallons, fuel.fuelTankExternal2Level, validFuelWeightPerGallon, rejected, warnings));
             sb.Append("],");
             sb.Append("\"outsideAirTemperatureCelsius\":").Append(Num(outsideAirTemperatureCelsius)).Append(",");
             sb.Append("\"visibilityKm\":").Append(Num(visibilityKm)).Append(",");
@@ -1282,34 +1901,62 @@ namespace SimpleSimConnector
             sb.Append("\"ambientPressurePascal\":").Append(Num(ambientPressurePascal)).Append(",");
             sb.Append("\"seaLevelPressurePascal\":").Append(Num(seaLevelPressurePascal)).Append(",");
             sb.Append("\"barometerSettingPascal\":").Append(Num(barometerSettingPascal)).Append(",");
-            sb.Append("\"apu\":{\"status\":").Append(JsonStringOrNull(apuStatus)).Append("},");
-            sb.Append("\"pressurization\":{\"cabinAltitudeMeters\":").Append(Num(t.cabinAltitudeMeters)).Append("},");
-            sb.Append("\"flightControls\":{\"yawDamperEnabled\":[").Append(JsonBoolOrNull(t.yawDamperEnabled)).Append("]},");
+            sb.Append("\"apu\":{\"status\":").Append(JsonStringOrNull(apuStatus)).Append(",\"source\":").Append(JsonStringOrNull(adapterResult.Apu != null ? adapterResult.Apu.Source : "generic-simvar")).Append("},");
+            sb.Append("\"pressurization\":{\"cabinAltitudeMeters\":").Append(Num(core.cabinAltitudeMeters)).Append("},");
+            sb.Append("\"flightControls\":{\"yawDamperEnabled\":[").Append(JsonBoolOrNull(yawDamperEnabled)).Append("]},");
             sb.Append("\"autopilot\":{");
-            sb.Append("\"flightDirectorEnabled\":").Append(flightDirectorEnabled).Append(",");
-            sb.Append("\"modes\":").Append(JsonStringArray(autopilotModes)).Append(",");
+            sb.Append("\"source\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Source : "generic-simvar")).Append(",");
+            sb.Append("\"flightDirectorEnabled\":").Append(JsonBoolOrNull(flightDirectorEnabled)).Append(",");
+            sb.Append("\"flightDirector1Enabled\":").Append(JsonBoolOrNull(flightDirector1Enabled)).Append(",");
+            sb.Append("\"flightDirector2Enabled\":").Append(JsonBoolOrNull(flightDirector2Enabled)).Append(",");
+            sb.Append("\"modes\":").Append(JsonStringArray(autopilotModes != null ? new List<string>(autopilotModes) : new List<string>())).Append(",");
             sb.Append("\"airspeedHoldMetersPerSecond\":").Append(Num(autopilotAirspeedHoldMetersPerSecond)).Append(",");
             sb.Append("\"machHoldMach\":").Append(Num(autopilotMachHoldMach)).Append(",");
             sb.Append("\"altitudeHoldMeters\":").Append(Num(autopilotAltitudeHoldMeters)).Append(",");
             sb.Append("\"altitudeArmMeters\":").Append(Num(autopilotAltitudeHoldMeters)).Append(",");
             sb.Append("\"headingLockDegrees\":").Append(Num(autopilotHeadingLockDegrees)).Append(",");
             sb.Append("\"pitchHoldDegrees\":").Append(Num(autopilotPitchHoldDegrees)).Append(",");
-            sb.Append("\"verticalSpeedHoldMetersPerSecond\":").Append(Num(autopilotVerticalSpeedHoldMetersPerSecond));
+            sb.Append("\"verticalSpeedHoldMetersPerSecond\":").Append(Num(autopilotVerticalSpeedHoldMetersPerSecond)).Append(",");
+            sb.Append("\"ap1Engaged\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Ap1Engaged : null)).Append(",");
+            sb.Append("\"ap2Engaged\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Ap2Engaged : null)).Append(",");
+            sb.Append("\"autoThrottleArmed\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.AutoThrottleArmed : null)).Append(",");
+            sb.Append("\"autoThrottleActive\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.AutoThrottleActive : null)).Append(",");
+            sb.Append("\"selectedSpeedMetersPerSecond\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedSpeedMetersPerSecond : null)).Append(",");
+            sb.Append("\"selectedMach\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedMach : null)).Append(",");
+            sb.Append("\"selectedHeadingDegrees\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedHeadingDegrees : null)).Append(",");
+            sb.Append("\"selectedAltitudeMeters\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedAltitudeMeters : null)).Append(",");
+            sb.Append("\"selectedVerticalSpeedMetersPerSecond\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond : null)).Append(",");
+            sb.Append("\"lateralMode\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.LateralMode : null)).Append(",");
+            sb.Append("\"verticalMode\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.VerticalMode : null)).Append(",");
+            sb.Append("\"managedSpeed\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.ManagedSpeed : null)).Append(",");
+            sb.Append("\"managedLateral\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.ManagedLateral : null)).Append(",");
+            sb.Append("\"managedVertical\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.ManagedVertical : null));
             sb.Append("},");
             sb.Append("\"aircraftInformation\":{");
             sb.Append("\"simulatorPath\":\"\",");
-            sb.Append("\"packagePath\":\"\",");
+            sb.Append("\"packagePath\":").Append(JsonStringOrNull(identity.PackagePath)).Append(",");
             sb.Append("\"version\":\"1.1.0\"");
             sb.Append("},");
-            sb.Append("\"diagnostics\":").Append(BuildDiagnosticsJson(rejected));
+            sb.Append("\"diagnostics\":").Append(BuildDiagnosticsJson(rejected, warnings, identity, genericSystems, adapterResult));
             sb.Append("}");
             LogRejectedTelemetry(rejected);
+            LogDiagnosticWarnings(warnings);
             return sb.ToString();
         }
 
         private string BuildCallsign()
         {
             return "SIMCONNECT";
+        }
+
+        private string BuildAircraftShort(AircraftIdentityInfo identity)
+        {
+            if (identity != null && !string.IsNullOrWhiteSpace(identity.DetectedVariant) && !string.Equals(identity.DetectedVariant, "unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                return identity.DetectedVariant;
+            }
+
+            return BuildAircraftShort(identity != null ? identity.Title : "");
         }
 
         private string BuildAircraftShort(string aircraftTitle)
@@ -1369,12 +2016,12 @@ namespace SimpleSimConnector
             }
         }
 
-        private void UpdateLatestLabel(Telemetry t)
+        private void UpdateLatestLabel(CoreFlightData t)
         {
             string callsign = BuildCallsign();
-            string aircraftShort = BuildAircraftShort(latestAircraftTitle);
+            string aircraftShort = BuildAircraftShort(latestAircraftIdentity);
             double altitudeFeet = TelemetryMath.MetersToFeet(t.altitudeMeters);
-            double groundspeedKnots = ZeroNoise(t.groundSpeedMetersPerSecond, 0.01);
+            double groundspeedKnots = ZeroNoise(t.groundSpeedKnots, 0.01);
 
             string text =
                 callsign + " / " + aircraftShort + Environment.NewLine +
@@ -1511,6 +2158,16 @@ namespace SimpleSimConnector
             return !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0.5;
         }
 
+        private static bool? ToNullableBool(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                return null;
+            }
+
+            return IsTruthy(value);
+        }
+
         private static string JsonBoolOrNull(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value))
@@ -1519,6 +2176,16 @@ namespace SimpleSimConnector
             }
 
             return IsTruthy(value) ? "true" : "false";
+        }
+
+        private static string JsonBoolOrNull(bool? value)
+        {
+            if (!value.HasValue)
+            {
+                return "null";
+            }
+
+            return value.Value ? "true" : "false";
         }
 
         private static double CombineAnyTrue(params double[] values)
@@ -1542,7 +2209,12 @@ namespace SimpleSimConnector
             return sawFinite ? 0.0 : double.NaN;
         }
 
-        private string BuildDiagnosticsJson(IList<TelemetryRejectedValue> rejected)
+        private string BuildDiagnosticsJson(
+            IList<TelemetryRejectedValue> rejected,
+            IList<TelemetryDiagnosticWarning> warnings,
+            AircraftIdentityInfo identity,
+            GenericSystemsData genericSystems,
+            AircraftAdapterResult adapterResult)
         {
             var sb = new StringBuilder();
             sb.Append("{\"rejected\":[");
@@ -1567,7 +2239,102 @@ namespace SimpleSimConnector
                 sb.Append("}");
             }
 
-            sb.Append("]}");
+            sb.Append("],\"warnings\":[");
+
+            for (int i = 0; i < warnings.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(",");
+                }
+
+                TelemetryDiagnosticWarning item = warnings[i];
+                sb.Append("{");
+                sb.Append("\"code\":").Append(JsonStringOrNull(item.Code)).Append(",");
+                sb.Append("\"message\":").Append(JsonStringOrNull(item.Message));
+                sb.Append("}");
+            }
+
+            sb.Append("],");
+            sb.Append("\"aircraftAdapter\":").Append(JsonStringOrNull(adapterResult != null ? adapterResult.AdapterName : "GenericAircraftAdapter")).Append(",");
+            sb.Append("\"fenixDetected\":").Append(Bool(adapterResult != null && adapterResult.FenixDetected)).Append(",");
+            sb.Append("\"fenixLvarSource\":").Append(JsonStringOrNull(adapterResult != null ? adapterResult.FenixLvarSource : "unavailable")).Append(",");
+            sb.Append("\"fenixVariablesDiscovered\":").Append(adapterResult != null ? adapterResult.FenixVariablesDiscovered.ToString(CultureInfo.InvariantCulture) : "0").Append(",");
+            sb.Append("\"fenixVariablesReadable\":").Append(adapterResult != null ? adapterResult.FenixVariablesReadable.ToString(CultureInfo.InvariantCulture) : "0").Append(",");
+            sb.Append("\"identity\":{");
+            sb.Append("\"title\":").Append(JsonStringOrNull(identity != null ? identity.Title : null)).Append(",");
+            sb.Append("\"atcModel\":").Append(JsonStringOrNull(identity != null ? identity.AtcModel : null)).Append(",");
+            sb.Append("\"atcType\":").Append(JsonStringOrNull(identity != null ? identity.AtcType : null)).Append(",");
+            sb.Append("\"simObjectTitle\":").Append(JsonStringOrNull(identity != null ? identity.SimObjectTitle : null)).Append(",");
+            sb.Append("\"packagePath\":").Append(JsonStringOrNull(identity != null ? identity.PackagePath : null)).Append(",");
+            sb.Append("\"detectedFamily\":").Append(JsonStringOrNull(identity != null ? identity.DetectedFamily : null)).Append(",");
+            sb.Append("\"detectedVariant\":").Append(JsonStringOrNull(identity != null ? identity.DetectedVariant : null));
+            sb.Append("},");
+            sb.Append("\"systems\":{");
+            sb.Append("\"apu\":{");
+            sb.Append("\"genericValue\":").Append(JsonStringOrNull(genericSystems != null ? genericSystems.ApuStatus : null)).Append(",");
+            sb.Append("\"fenixRaw\":").Append(JsonNullableDoubleMap(adapterResult != null && adapterResult.Apu != null ? adapterResult.Apu.RawValues : null)).Append(",");
+            sb.Append("\"selected\":").Append(JsonStringOrNull(adapterResult != null && adapterResult.Apu != null ? adapterResult.Apu.Status : null)).Append(",");
+            sb.Append("\"reason\":").Append(JsonStringOrNull(adapterResult != null && adapterResult.Apu != null ? adapterResult.Apu.SelectionReason : null));
+            sb.Append("},");
+            sb.Append("\"flightDirector\":{");
+            sb.Append("\"genericValue\":").Append(JsonBoolOrNull(genericSystems != null ? genericSystems.FlightDirectorEnabled : null)).Append(",");
+            sb.Append("\"fenixRaw\":{");
+            sb.Append("\"fd1\":").Append(Num(adapterResult != null && adapterResult.Autopilot != null ? GetRawValue(adapterResult.Autopilot.RawValues, "I_FCU_EFIS1_FD", "S_FCU_EFIS1_FD") : null)).Append(",");
+            sb.Append("\"fd2\":").Append(Num(adapterResult != null && adapterResult.Autopilot != null ? GetRawValue(adapterResult.Autopilot.RawValues, "I_FCU_EFIS2_FD", "S_FCU_EFIS2_FD") : null));
+            sb.Append("},");
+            sb.Append("\"selected\":").Append(JsonBoolOrNull(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirectorEnabled : null)).Append(",");
+            sb.Append("\"reason\":").Append(JsonStringOrNull(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectionReason : null));
+            sb.Append("},");
+            sb.Append("\"autopilot\":{");
+            sb.Append("\"genericModes\":").Append(JsonStringArray(genericSystems != null && genericSystems.AutopilotModes != null ? new List<string>(genericSystems.AutopilotModes) : new List<string>())).Append(",");
+            sb.Append("\"fenixRaw\":").Append(JsonNullableDoubleMap(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.RawValues : null)).Append(",");
+            sb.Append("\"selectedSource\":").Append(JsonStringOrNull(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.Source : null));
+            sb.Append("}");
+            sb.Append("}}");
+            return sb.ToString();
+        }
+
+        private static double? GetRawValue(IDictionary<string, double?> values, params string[] keys)
+        {
+            if (values == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(keys[i], out value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
+        private static string JsonNullableDoubleMap(IDictionary<string, double?> values)
+        {
+            if (values == null || values.Count == 0)
+            {
+                return "{}";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append("{");
+            bool first = true;
+            foreach (KeyValuePair<string, double?> pair in values)
+            {
+                if (!first)
+                {
+                    sb.Append(",");
+                }
+
+                first = false;
+                sb.Append("\"").Append(Escape(pair.Key)).Append("\":").Append(Num(pair.Value));
+            }
+            sb.Append("}");
             return sb.ToString();
         }
 
@@ -1586,6 +2353,128 @@ namespace SimpleSimConnector
                     " reason=" + (item.Reason ?? "") +
                     " action=" + (item.Action ?? ""));
             }
+        }
+
+        private void LogDiagnosticWarnings(IList<TelemetryDiagnosticWarning> warnings)
+        {
+            foreach (TelemetryDiagnosticWarning item in warnings)
+            {
+                Log("Telemetry warning code=" + (item.Code ?? "") + " message=" + (item.Message ?? ""));
+            }
+        }
+
+        private string ResolveComFrequency(
+            string jsonField,
+            string simVarName,
+            double available,
+            double rawFrequencyBcd16,
+            IList<TelemetryRejectedValue> rejected)
+        {
+            if (!IsTruthy(available))
+            {
+                rejected.Add(TelemetryMath.CreateRejectedValue(
+                    jsonField,
+                    TelemetryMath.FormatNumeric(rawFrequencyBcd16),
+                    null,
+                    "unavailable",
+                    "null"));
+                return null;
+            }
+
+            string formattedFrequency = FormatComFrequencyBcd16(rawFrequencyBcd16);
+            return TelemetryMath.ValidateFrequencyString(jsonField, rawFrequencyBcd16, formattedFrequency, rejected);
+        }
+
+        private string ResolveNavFrequency(
+            string jsonField,
+            string simVarName,
+            double available,
+            double rawFrequencyMhz,
+            IList<TelemetryRejectedValue> rejected)
+        {
+            if (!IsTruthy(available))
+            {
+                rejected.Add(TelemetryMath.CreateRejectedValue(
+                    jsonField,
+                    TelemetryMath.FormatNumeric(rawFrequencyMhz),
+                    null,
+                    "unavailable",
+                    "null"));
+                return null;
+            }
+
+            return TelemetryMath.ValidateFrequencyString(jsonField, rawFrequencyMhz, FormatFrequency(rawFrequencyMhz), rejected);
+        }
+
+        private static int GetDefinitionIndex(IReadOnlyList<SimVarDefinition> definitions, string structFieldName)
+        {
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                if (string.Equals(definitions[i].StructFieldName, structFieldName, StringComparison.Ordinal))
+                {
+                    return i + 1;
+                }
+            }
+
+            return -1;
+        }
+
+        private string FindDefinitionName(int oneBasedIndex)
+        {
+            var matches = new List<string>();
+            AddDefinitionMatch(matches, identityDefinitionNames, oneBasedIndex, "Identity");
+            AddDefinitionMatch(matches, coreFlightDefinitionNames, oneBasedIndex, "CoreFlight");
+            AddDefinitionMatch(matches, weatherDefinitionNames, oneBasedIndex, "Weather");
+            AddDefinitionMatch(matches, radioDefinitionNames, oneBasedIndex, "Radio");
+            AddDefinitionMatch(matches, fuelDefinitionNames, oneBasedIndex, "Fuel");
+            AddDefinitionMatch(matches, engineDefinitionNames, oneBasedIndex, "Engine");
+            AddDefinitionMatch(matches, autopilotDefinitionNames, oneBasedIndex, "Autopilot");
+
+            if (matches.Count == 0)
+            {
+                return null;
+            }
+
+            return string.Join(" | ", matches.ToArray());
+        }
+
+        private static void AddDefinitionMatch(List<string> matches, List<string> definitions, int oneBasedIndex, string groupName)
+        {
+            int zeroBasedIndex = oneBasedIndex - 1;
+            if (zeroBasedIndex >= 0 && zeroBasedIndex < definitions.Count)
+            {
+                matches.Add(groupName + ":" + definitions[zeroBasedIndex]);
+            }
+        }
+
+        private static CoreFlightData CreateUnavailableCoreFlightData()
+        {
+            return new CoreFlightData();
+        }
+
+        private static WeatherData CreateUnavailableWeatherData()
+        {
+            return new WeatherData();
+        }
+
+        private static RadioData CreateUnavailableRadioData()
+        {
+            return new RadioData();
+        }
+
+        private static FuelData CreateUnavailableFuelData()
+        {
+            return new FuelData();
+        }
+
+        private static EngineData CreateUnavailableEngineData()
+        {
+            return new EngineData();
+        }
+
+        private static AutopilotData CreateUnavailableAutopilotData()
+        {
+            return new AutopilotData();
         }
 
         private static string FormatFrequency(double value)
@@ -1668,7 +2557,7 @@ namespace SimpleSimConnector
             return null;
         }
 
-        private static string BuildApuStatus(Telemetry t)
+        private static string BuildApuStatus(EngineData t)
         {
             if (double.IsNaN(t.apuPctRpm) || double.IsInfinity(t.apuPctRpm))
             {
@@ -1691,33 +2580,46 @@ namespace SimpleSimConnector
         private string BuildFuelTankJson(
             string position,
             double capacityGallons,
-            double quantityGallons,
-            double fuelWeightPerGallon,
-            IList<TelemetryRejectedValue> rejected)
+            double rawLevel,
+            double? validFuelWeightPerGallon,
+            IList<TelemetryRejectedValue> rejected,
+            IList<TelemetryDiagnosticWarning> warnings)
         {
             var sb = new StringBuilder();
             sb.Append("{\"position\":\"").Append(Escape(position)).Append("\"");
 
-            double? capacityKgs = TelemetryMath.ValidateNumeric(
-                "fuelTanks[*].capacityKgs",
-                capacityGallons,
-                TelemetryMath.GallonsToKilograms(capacityGallons, fuelWeightPerGallon),
-                rejected);
-            if (capacityKgs.HasValue)
+            double? capacityKgs = null;
+            if (validFuelWeightPerGallon.HasValue)
             {
-                sb.Append(",\"capacityKgs\":").Append(Num(capacityKgs));
+                capacityKgs = TelemetryMath.ValidateNumeric(
+                    "fuelTanks[*].capacityKgs",
+                    capacityGallons,
+                    TelemetryMath.GallonsToKilograms(capacityGallons, validFuelWeightPerGallon.Value),
+                    rejected);
+            }
+            else
+            {
+                rejected.Add(TelemetryMath.CreateRejectedValue(
+                    "fuelTanks[*].capacityKgs",
+                    TelemetryMath.FormatNumeric(capacityGallons),
+                    null,
+                    "invalid_fuel_density",
+                    "null"));
             }
 
-            double? percentageFilled = TelemetryMath.ValidateNumeric(
-                "fuelTanks[*].percentageFilled",
-                quantityGallons,
-                TelemetryMath.QuantityToPercent(quantityGallons, capacityGallons),
-                rejected);
-            if (percentageFilled.HasValue)
+            double? percentageFilled = TelemetryMath.ConvertFuelLevelToPercent(rawLevel, warnings);
+            if (!percentageFilled.HasValue && TelemetryMath.IsFinite(rawLevel))
             {
-                sb.Append(",\"percentageFilled\":").Append(Num(percentageFilled));
+                rejected.Add(TelemetryMath.CreateRejectedValue(
+                    "fuelTanks[*].percentageFilled",
+                    TelemetryMath.FormatNumeric(rawLevel),
+                    null,
+                    "invalid_fuel_level",
+                    "null"));
             }
 
+            sb.Append(",\"capacityKgs\":").Append(Num(capacityKgs));
+            sb.Append(",\"percentageFilled\":").Append(Num(percentageFilled));
             sb.Append("}");
             return sb.ToString();
         }
@@ -1842,7 +2744,7 @@ namespace SimpleSimConnector
             return millibars * 100.0;
         }
 
-        private static List<string> BuildAutopilotModes(Telemetry t)
+        private static List<string> BuildAutopilotModes(AutopilotData t)
         {
             var modes = new List<string>();
 

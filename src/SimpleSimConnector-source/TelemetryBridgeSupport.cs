@@ -97,6 +97,12 @@ namespace SimpleSimConnector
         public string Action { get; set; }
     }
 
+    public sealed class TelemetryDiagnosticWarning
+    {
+        public string Code { get; set; }
+        public string Message { get; set; }
+    }
+
     public static class TelemetryBridgeCatalog
     {
         public static readonly SimVarDefinition[] IdentityDefinitions =
@@ -104,6 +110,28 @@ namespace SimpleSimConnector
             new SimVarDefinition(
                 "title",
                 "TITLE",
+                null,
+                null,
+                "STRING256",
+                "string",
+                "string",
+                "identity",
+                "n/a",
+                isString: true),
+            new SimVarDefinition(
+                "atcModel",
+                "ATC MODEL",
+                null,
+                null,
+                "STRING256",
+                "string",
+                "string",
+                "identity",
+                "n/a",
+                isString: true),
+            new SimVarDefinition(
+                "atcType",
+                "ATC TYPE",
                 null,
                 null,
                 "STRING256",
@@ -141,8 +169,8 @@ namespace SimpleSimConnector
             new SimVarDefinition("lightInstruments", "LIGHT PANEL", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
             new SimVarDefinition("lightLogo", "LIGHT LOGO", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
             new SimVarDefinition("lightCabin", "LIGHT CABIN", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
-            new SimVarDefinition("com1Frequency", "COM ACTIVE FREQUENCY:1", 1, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", "118.00..136.99"),
-            new SimVarDefinition("com2Frequency", "COM ACTIVE FREQUENCY:2", 2, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", "118.00..136.99"),
+            new SimVarDefinition("com1Frequency", "COM ACTIVE FREQUENCY:1", 1, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "118.00..136.99"),
+            new SimVarDefinition("com2Frequency", "COM ACTIVE FREQUENCY:2", 2, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "118.00..136.99"),
             new SimVarDefinition("nav1Frequency", "NAV ACTIVE FREQUENCY:1", 1, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "108.00..117.95"),
             new SimVarDefinition("nav2Frequency", "NAV ACTIVE FREQUENCY:2", 2, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", "108.00..117.95"),
             new SimVarDefinition("transponderCode", "TRANSPONDER CODE:1", 1, "number", "FLOAT64", "number", "octal string", "format 0000", "0000..7777"),
@@ -182,9 +210,9 @@ namespace SimpleSimConnector
             new SimVarDefinition("visibilityMeters", "AMBIENT VISIBILITY", null, "meters", "FLOAT64", "meters", "km", "meters / 1000", ">= 0"),
             new SimVarDefinition("windSpeedKnots", "AMBIENT WIND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", "0..150"),
             new SimVarDefinition("windDirectionDegrees", "AMBIENT WIND DIRECTION", null, "degrees", "FLOAT64", "degrees true", "degrees", "normalize heading", "0..360"),
-            new SimVarDefinition("ambientPressureInchesHg", "AMBIENT PRESSURE", null, "inHg", "FLOAT64", "inHg", "pascal", "inHg * 3386.389", "15000..110000"),
+            new SimVarDefinition("ambientPressureInchesHg", "AMBIENT PRESSURE", null, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "15000..110000"),
             new SimVarDefinition("seaLevelPressurePascal", "SEA LEVEL PRESSURE", null, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "80000..110000"),
-            new SimVarDefinition("barometerSettingMillibars", "KOHLSMAN SETTING MB:1", 1, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "80000..110000"),
+            new SimVarDefinition("barometerSettingMillibars", "BAROMETER PRESSURE", null, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", "80000..110000"),
             new SimVarDefinition("cabinAltitudeMeters", "PRESSURIZATION CABIN ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", "n/a"),
             new SimVarDefinition("yawDamperEnabled", "AUTOPILOT YAW DAMPER", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
             new SimVarDefinition("flightDirectorEnabled", "AUTOPILOT FLIGHT DIRECTOR ACTIVE", null, "bool", "FLOAT64", "bool", "bool", "raw bool", "0|1"),
@@ -434,6 +462,92 @@ namespace SimpleSimConnector
 
             double? validated = ValidateNumeric(jsonField, rawValue, numericValue, rejected);
             return validated.HasValue ? formattedFrequency : null;
+        }
+
+        public static double? ValidateFuelWeightPerGallon(
+            double rawFuelWeightPerGallon,
+            IList<TelemetryRejectedValue> rejected)
+        {
+            if (!IsValidFuelWeightPerGallon(rawFuelWeightPerGallon))
+            {
+                AddRejected(rejected, null, rawFuelWeightPerGallon, rawFuelWeightPerGallon, IsFinite(rawFuelWeightPerGallon) ? "invalid_fuel_density" : "not_finite");
+                return null;
+            }
+
+            return rawFuelWeightPerGallon;
+        }
+
+        public static double? ConvertFuelLevelToPercent(
+            double rawLevel,
+            IList<TelemetryDiagnosticWarning> warnings)
+        {
+            if (!IsFinite(rawLevel) || rawLevel < 0)
+            {
+                return null;
+            }
+
+            if (rawLevel <= 1.0)
+            {
+                return rawLevel * 100.0;
+            }
+
+            if (rawLevel <= 100.0)
+            {
+                warnings.Add(new TelemetryDiagnosticWarning
+                {
+                    Code = "fuel_level_already_percent",
+                    Message = "Fuel level raw value was already in percent: " + rawLevel.ToString("G17", CultureInfo.InvariantCulture)
+                });
+                return rawLevel;
+            }
+
+            return null;
+        }
+
+        public static TelemetryRejectedValue CreateRejectedValue(
+            string jsonField,
+            string rawValue,
+            string convertedValue,
+            string reason,
+            string action)
+        {
+            JsonFieldMapping mapping = TelemetryBridgeCatalog.FindJsonField(jsonField);
+            return new TelemetryRejectedValue
+            {
+                JsonField = mapping != null ? mapping.JsonField : jsonField,
+                SimVarName = mapping != null ? mapping.SimVarName : null,
+                RequestedUnit = mapping != null ? mapping.SimConnectUnit : null,
+                RawValue = rawValue,
+                ConvertedValue = convertedValue,
+                SanityRange = mapping != null ? mapping.SanityRange : null,
+                Reason = reason,
+                Action = action
+            };
+        }
+
+        public static bool IsValidFuelWeightPerGallon(double rawFuelWeightPerGallon)
+        {
+            return IsFinite(rawFuelWeightPerGallon) &&
+                rawFuelWeightPerGallon >= 4.0 &&
+                rawFuelWeightPerGallon <= 8.5;
+        }
+
+        public static bool IsPressureMappingSuspicious(
+            double? altitudeMeters,
+            double? ambientPressurePascal,
+            double? seaLevelPressurePascal)
+        {
+            return altitudeMeters.HasValue &&
+                altitudeMeters.Value > 100.0 &&
+                ambientPressurePascal.HasValue &&
+                seaLevelPressurePascal.HasValue &&
+                ambientPressurePascal.Value > seaLevelPressurePascal.Value;
+        }
+
+        public static bool ShouldMarkWeatherStructSuspect(double rawOutsideAirTemperatureCelsius)
+        {
+            return IsFinite(rawOutsideAirTemperatureCelsius) &&
+                (rawOutsideAirTemperatureCelsius < -100.0 || rawOutsideAirTemperatureCelsius > 70.0);
         }
 
         public static bool IsFinite(double value)

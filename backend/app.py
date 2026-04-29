@@ -338,8 +338,13 @@ def normalize_telemetry_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     latitude_source = first_present(payload.get("latitude"), nested_get(payload, "position", "latitude"))
     longitude_source = first_present(payload.get("longitude"), nested_get(payload, "position", "longitude"))
-    altitude_source = first_present(payload.get("altitude"), payload.get("altitudeMeters"))
-    groundspeed_source = first_present(payload.get("groundspeed"), payload.get("groundSpeedMetersPerSecond"))
+    altitude_source = first_present(payload.get("altitudeFeet"), payload.get("altitude"))
+    if altitude_source in (None, "") and payload.get("altitudeMeters") not in (None, ""):
+        altitude_source = parse_finite_float(payload.get("altitudeMeters"), "altitudeMeters") * 3.280839895013123
+
+    groundspeed_source = first_present(payload.get("groundSpeedKnots"), payload.get("groundspeed"))
+    if groundspeed_source in (None, "") and payload.get("groundSpeedMetersPerSecond") not in (None, ""):
+        groundspeed_source = parse_finite_float(payload.get("groundSpeedMetersPerSecond"), "groundSpeedMetersPerSecond") * 1.9438444924406046
     heading_source = first_present(payload.get("heading"), payload.get("headingTrueDegrees"))
 
     latitude = None

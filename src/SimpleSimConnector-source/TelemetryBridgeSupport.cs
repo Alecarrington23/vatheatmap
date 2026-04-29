@@ -235,27 +235,51 @@ namespace SimpleSimConnector
             new JsonFieldMapping("position.latitude", "PLANE LATITUDE", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", -90, 90, "-90..90"),
             new JsonFieldMapping("longitude", "PLANE LONGITUDE", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", -180, 180, "-180..180"),
             new JsonFieldMapping("position.longitude", "PLANE LONGITUDE", null, "degrees", "FLOAT64", "degrees", "degrees", "identity", -180, 180, "-180..180"),
-            new JsonFieldMapping("altitude", "PLANE ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", null, null, "n/a"),
+            new JsonFieldMapping("altitude", "PLANE ALTITUDE", null, "meters", "FLOAT64", "meters", "feet", "meters / 0.3048", null, null, "n/a"),
+            new JsonFieldMapping("altitudeFeet", "PLANE ALTITUDE", null, "meters", "FLOAT64", "meters", "feet", "meters / 0.3048", null, null, "n/a"),
             new JsonFieldMapping("altitudeMeters", "PLANE ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", null, null, "n/a"),
-            new JsonFieldMapping("groundspeed", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 150, "0..150"),
-            new JsonFieldMapping("groundSpeedMetersPerSecond", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 150, "0..150"),
+            new JsonFieldMapping("groundspeed", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 800, "0..800"),
+            new JsonFieldMapping("groundSpeedKnots", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 800, "0..800"),
+            new JsonFieldMapping("groundSpeedMetersPerSecond", "GROUND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 400, "0..400"),
             new JsonFieldMapping("heading", "PLANE HEADING DEGREES TRUE", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", 0, 360, "0..360"),
             new JsonFieldMapping("headingTrueDegrees", "PLANE HEADING DEGREES TRUE", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", 0, 360, "0..360"),
             new JsonFieldMapping("headingMagneticDegrees", "PLANE HEADING DEGREES MAGNETIC", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", 0, 360, "0..360"),
+            new JsonFieldMapping("groundElevationFeet", "GROUND ALTITUDE", null, "meters", "FLOAT64", "meters", "feet", "meters / 0.3048", null, null, "n/a"),
+            new JsonFieldMapping("groundElevationMeters", "GROUND ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", null, null, "n/a"),
+            new JsonFieldMapping("landingRateFeetPerMinute", "PLANE TOUCHDOWN NORMAL VELOCITY", null, "meters per second", "FLOAT64", "m/s", "ft/min", "m/s / 0.00508", null, null, "n/a"),
+            new JsonFieldMapping("landingRateMetersPerSecond", "PLANE TOUCHDOWN NORMAL VELOCITY", null, "meters per second", "FLOAT64", "m/s", "m/s", "identity", null, null, "n/a"),
+            new JsonFieldMapping("indicatedAirspeedKnots", "AIRSPEED INDICATED", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 700, "0..700"),
+            new JsonFieldMapping("indicatedAirspeedMetersPerSecond", "AIRSPEED INDICATED", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 400, "0..400"),
+            new JsonFieldMapping("trueAirspeedKnots", "AIRSPEED TRUE", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 800, "0..800"),
+            new JsonFieldMapping("trueAirspeedMetersPerSecond", "AIRSPEED TRUE", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 450, "0..450"),
+            new JsonFieldMapping("barberPoleAirspeedKnots", "AIRSPEED BARBER POLE", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 800, "0..800"),
+            new JsonFieldMapping("barberPoleAirspeedMetersPerSecond", "AIRSPEED BARBER POLE", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 450, "0..450"),
+            new JsonFieldMapping("verticalSpeedFeetPerMinute", "VERTICAL SPEED", null, "feet per second", "FLOAT64", "ft/s", "ft/min", "ft/s * 60", null, null, "n/a"),
+            new JsonFieldMapping("verticalSpeedMetersPerSecond", "VERTICAL SPEED", null, "feet per second", "FLOAT64", "ft/s", "m/s", "ft/s * 0.3048", null, null, "n/a"),
             new JsonFieldMapping("outsideAirTemperatureCelsius", "AMBIENT TEMPERATURE", null, "celsius", "FLOAT64", "celsius", "celsius", "identity", -100, 70, "-100..70"),
             new JsonFieldMapping("visibilityKm", "AMBIENT VISIBILITY", null, "meters", "FLOAT64", "meters", "km", "meters / 1000", 0, null, ">= 0"),
+            new JsonFieldMapping("windSpeedKnots", "AMBIENT WIND VELOCITY", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 300, "0..300"),
             new JsonFieldMapping("windSpeedMetersPerSecond", "AMBIENT WIND VELOCITY", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 150, "0..150"),
             new JsonFieldMapping("windDirectionDegrees", "AMBIENT WIND DIRECTION", null, "degrees", "FLOAT64", "degrees true", "degrees", "normalize heading", 0, 360, "0..360"),
             new JsonFieldMapping("ambientPressurePascal", "AMBIENT PRESSURE", null, "inHg", "FLOAT64", "inHg", "pascal", "inHg * 3386.389", 15000, 110000, "15000..110000"),
             new JsonFieldMapping("seaLevelPressurePascal", "SEA LEVEL PRESSURE", null, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", 80000, 110000, "80000..110000"),
             new JsonFieldMapping("barometerSettingPascal", "KOHLSMAN SETTING MB:1", 1, "millibars", "FLOAT64", "millibars", "pascal", "mbar * 100", 80000, 110000, "80000..110000"),
+            new JsonFieldMapping("pressurization.cabinAltitudeFeet", "PRESSURIZATION CABIN ALTITUDE", null, "meters", "FLOAT64", "meters", "feet", "meters / 0.3048", null, null, "n/a"),
+            new JsonFieldMapping("pressurization.cabinAltitudeMeters", "PRESSURIZATION CABIN ALTITUDE", null, "meters", "FLOAT64", "meters", "meters", "identity", null, null, "n/a"),
+            new JsonFieldMapping("autopilot.airspeedHoldKnots", "AUTOPILOT AIRSPEED HOLD VAR", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 450, "0..450"),
             new JsonFieldMapping("autopilot.airspeedHoldMetersPerSecond", "AUTOPILOT AIRSPEED HOLD VAR", null, "knots", "FLOAT64", "knots", "m/s", "knots * 0.514444", 0, 250, "0..250"),
             new JsonFieldMapping("autopilot.machHoldMach", "AUTOPILOT MACH HOLD VAR", null, "mach", "FLOAT64", "mach", "mach", "identity", 0, 1.2, "0..1.2"),
+            new JsonFieldMapping("autopilot.altitudeHoldFeet", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "feet", "identity", null, null, "n/a"),
             new JsonFieldMapping("autopilot.altitudeHoldMeters", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "meters", "feet * 0.3048", null, null, "n/a"),
+            new JsonFieldMapping("autopilot.altitudeArmFeet", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "feet", "identity", null, null, "n/a"),
             new JsonFieldMapping("autopilot.altitudeArmMeters", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "meters", "feet * 0.3048", null, null, "n/a"),
             new JsonFieldMapping("autopilot.headingLockDegrees", "AUTOPILOT HEADING LOCK DIR", null, "degrees", "FLOAT64", "degrees", "degrees", "normalize heading", 0, 360, "0..360"),
             new JsonFieldMapping("autopilot.pitchHoldDegrees", "AUTOPILOT PITCH HOLD REF", null, "radians", "FLOAT64", "radians", "degrees", "rad * 57.2957795", null, null, "n/a"),
+            new JsonFieldMapping("autopilot.verticalSpeedHoldFeetPerMinute", "AUTOPILOT VERTICAL HOLD VAR", null, "feet per minute", "FLOAT64", "ft/min", "ft/min", "identity", null, null, "n/a"),
             new JsonFieldMapping("autopilot.verticalSpeedHoldMetersPerSecond", "AUTOPILOT VERTICAL HOLD VAR", null, "feet per minute", "FLOAT64", "ft/min", "m/s", "ft/min * 0.00508", null, null, "n/a"),
+            new JsonFieldMapping("autopilot.selectedSpeedKnots", "AUTOPILOT AIRSPEED HOLD VAR", null, "knots", "FLOAT64", "knots", "knots", "identity", 0, 450, "0..450"),
+            new JsonFieldMapping("autopilot.selectedAltitudeFeet", "AUTOPILOT ALTITUDE LOCK VAR", null, "feet", "FLOAT64", "feet", "feet", "identity", null, null, "n/a"),
+            new JsonFieldMapping("autopilot.selectedVerticalSpeedFeetPerMinute", "AUTOPILOT VERTICAL HOLD VAR", null, "feet per minute", "FLOAT64", "ft/min", "ft/min", "identity", null, null, "n/a"),
             new JsonFieldMapping("com1", "COM ACTIVE FREQUENCY:1", 1, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", 118, 136.99, "118.00..136.99"),
             new JsonFieldMapping("com2", "COM ACTIVE FREQUENCY:2", 2, "Frequency BCD16", "FLOAT64", "BCD16", "MHz string", "decode BCD16", 118, 136.99, "118.00..136.99"),
             new JsonFieldMapping("nav1", "NAV ACTIVE FREQUENCY:1", 1, "MHz", "FLOAT64", "MHz", "MHz string", "identity format", 108, 117.95, "108.00..117.95"),
@@ -322,9 +346,19 @@ namespace SimpleSimConnector
             return IsFinite(metersPerSecond) ? metersPerSecond / 0.514444 : metersPerSecond;
         }
 
+        public static double MetersPerSecondToFeetPerMinute(double metersPerSecond)
+        {
+            return IsFinite(metersPerSecond) ? metersPerSecond / 0.00508 : metersPerSecond;
+        }
+
         public static double FeetPerSecondToMetersPerSecond(double feetPerSecond)
         {
             return IsFinite(feetPerSecond) ? feetPerSecond * 0.3048 : feetPerSecond;
+        }
+
+        public static double FeetPerSecondToFeetPerMinute(double feetPerSecond)
+        {
+            return IsFinite(feetPerSecond) ? feetPerSecond * 60.0 : feetPerSecond;
         }
 
         public static double FeetPerMinuteToMetersPerSecond(double feetPerMinute)

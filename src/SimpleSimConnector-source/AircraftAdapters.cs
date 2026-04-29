@@ -277,6 +277,79 @@ namespace SimpleSimConnector
         }
     }
 
+    public static class IniBuildsVariableDiscovery
+    {
+        public static FenixVariableDiscoveryResult DiscoverLvarsFromBehaviorXml(string xmlPath, string[] keywords)
+        {
+            var variables = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (string.IsNullOrWhiteSpace(xmlPath) || !File.Exists(xmlPath))
+            {
+                return new FenixVariableDiscoveryResult
+                {
+                    CockpitBehaviorPath = Clean(xmlPath),
+                    CandidateVariables = new List<string>(),
+                    CandidateVariableSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                };
+            }
+
+            string content = File.ReadAllText(xmlPath);
+            int index = 0;
+
+            while (index >= 0 && index < content.Length)
+            {
+                index = content.IndexOf("L:", index, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                {
+                    break;
+                }
+
+                int start = index + 2;
+                int end = start;
+                while (end < content.Length)
+                {
+                    char current = content[end];
+                    if (!(char.IsLetterOrDigit(current) || current == '_' || current == ':' || current == '-'))
+                    {
+                        break;
+                    }
+
+                    end++;
+                }
+
+                string candidate = Clean(content.Substring(start, end - start).TrimEnd(','));
+                index = end;
+
+                if (candidate.Length == 0)
+                {
+                    continue;
+                }
+
+                string upper = candidate.ToUpperInvariant();
+                for (int i = 0; i < keywords.Length; i++)
+                {
+                    if (upper.Contains(keywords[i]))
+                    {
+                        variables.Add(candidate);
+                        break;
+                    }
+                }
+            }
+
+            return new FenixVariableDiscoveryResult
+            {
+                CockpitBehaviorPath = xmlPath,
+                CandidateVariables = new List<string>(variables),
+                CandidateVariableSet = new HashSet<string>(variables, StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        private static string Clean(string value)
+        {
+            return (value ?? string.Empty).Trim();
+        }
+    }
+
     public class GenericAircraftAdapter : IAircraftAdapter
     {
         public virtual string Name
@@ -862,6 +935,34 @@ namespace SimpleSimConnector
 
     public sealed class Pmdg777Adapter : GenericAircraftAdapter
     {
+        private static readonly string[] RequestedFields =
+        {
+            "ELEC_APUGen_Sw_ON",
+            "ELEC_APU_Selector",
+            "AIR_APUBleedAir_Sw_AUTO",
+            "MCP_IASMach",
+            "MCP_IASBlank",
+            "MCP_Heading",
+            "MCP_Altitude",
+            "MCP_VertSpeed",
+            "MCP_VertSpeedBlank",
+            "MCP_FD_Sw_On_L",
+            "MCP_FD_Sw_On_R",
+            "MCP_ATArm_Sw_On_L",
+            "MCP_ATArm_Sw_On_R",
+            "MCP_annunAP_L",
+            "MCP_annunAP_R",
+            "MCP_annunAT",
+            "MCP_annunLNAV",
+            "MCP_annunVNAV",
+            "MCP_annunFLCH",
+            "MCP_annunHDG_HOLD",
+            "MCP_annunVS_FPA",
+            "MCP_annunALT_HOLD",
+            "MCP_annunLOC",
+            "MCP_annunAPP"
+        };
+
         public override string Name
         {
             get { return "Pmdg777Adapter"; }
@@ -871,6 +972,305 @@ namespace SimpleSimConnector
         {
             return identity != null &&
                 string.Equals(identity.DetectedFamily, "PMDG 777", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public override AircraftAdapterResult Evaluate(AircraftAdapterContext context)
+        {
+            GenericSystemsData generic = context != null && context.Generic != null
+                ? context.Generic
+                : new GenericSystemsData();
+
+            bool readable = context != null &&
+                context.CustomVariableValues != null &&
+                context.ReadableVariableCount > 0;
+
+            var result = new AircraftAdapterResult
+            {
+                AdapterName = Name,
+                Identity = context != null ? context.Identity : null,
+                FenixDetected = false,
+                FenixLvarSource = readable ? "pmdg-777-sdk" : "pmdg-777-sdk-unavailable",
+                FenixVariablesDiscovered = RequestedFields.Length,
+                FenixVariablesReadable = context != null ? context.ReadableVariableCount : 0
+            };
+
+            if (!readable)
+            {
+                result.Apu = new AdapterApuState
+                {
+                    Status = null,
+                    Source = "pmdg-777-sdk-unavailable",
+                    SelectionReason = "PMDG 777 detected but no readable PMDG SDK client data is available",
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                result.Autopilot = new AdapterAutopilotState
+                {
+                    Source = "pmdg-777-sdk-unavailable",
+                    SelectionReason = "PMDG 777 detected but no readable PMDG SDK autoflight data is available",
+                    FlightDirectorEnabled = null,
+                    FlightDirector1Enabled = null,
+                    FlightDirector2Enabled = null,
+                    Ap1Engaged = null,
+                    Ap2Engaged = null,
+                    AutoThrottleArmed = null,
+                    AutoThrottleActive = null,
+                    SelectedSpeedMetersPerSecond = null,
+                    SelectedMach = null,
+                    SelectedHeadingDegrees = null,
+                    SelectedAltitudeMeters = null,
+                    SelectedVerticalSpeedMetersPerSecond = null,
+                    LateralMode = null,
+                    VerticalMode = null,
+                    ManagedSpeed = null,
+                    ManagedLateral = null,
+                    ManagedVertical = null,
+                    YawDamperEnabled = generic.YawDamperEnabled,
+                    Modes = new List<string>(),
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                return result;
+            }
+
+            IReadOnlyDictionary<string, double?> values = context.CustomVariableValues;
+            var apuRaw = Collect(values,
+                "ELEC_APUGen_Sw_ON",
+                "ELEC_APU_Selector",
+                "AIR_APUBleedAir_Sw_AUTO");
+
+            bool? apuGenerator = FirstKnownBoolean(values, "ELEC_APUGen_Sw_ON");
+            bool? apuBleed = FirstKnownBoolean(values, "AIR_APUBleedAir_Sw_AUTO");
+            double? apuSelectorRaw = FirstFinite(values, "ELEC_APU_Selector");
+            string apuStatus;
+
+            if (apuBleed == true) apuStatus = "bleed_on";
+            else if (apuSelectorRaw.HasValue && Math.Round(apuSelectorRaw.Value) >= 2.0) apuStatus = "starting";
+            else if (apuGenerator == true) apuStatus = "available";
+            else if (apuSelectorRaw.HasValue && Math.Round(apuSelectorRaw.Value) >= 1.0) apuStatus = "running";
+            else if (apuSelectorRaw.HasValue && Math.Round(apuSelectorRaw.Value) <= 0.0 && apuGenerator == false && apuBleed == false) apuStatus = "off";
+            else apuStatus = "unknown";
+
+            bool? fd1 = FirstKnownBoolean(values, "MCP_FD_Sw_On_L");
+            bool? fd2 = FirstKnownBoolean(values, "MCP_FD_Sw_On_R");
+            bool? flightDirector = CombineConfirmed(fd1, fd2);
+            bool? ap1 = FirstKnownBoolean(values, "MCP_annunAP_L");
+            bool? ap2 = FirstKnownBoolean(values, "MCP_annunAP_R");
+            bool? autoThrottleArmed = AnyKnownBoolean(values, "MCP_ATArm_Sw_On_L", "MCP_ATArm_Sw_On_R");
+            bool? autoThrottleActive = FirstKnownBoolean(values, "MCP_annunAT");
+            bool? iasBlank = FirstKnownBoolean(values, "MCP_IASBlank");
+            bool? verticalSpeedBlank = FirstKnownBoolean(values, "MCP_VertSpeedBlank");
+
+            double? selectedSpeedMetersPerSecond = null;
+            double? selectedMach = null;
+            double? iasMachRaw = FirstFinite(values, "MCP_IASMach");
+            if (iasMachRaw.HasValue && iasBlank != true)
+            {
+                if (iasMachRaw.Value > 0.0 && iasMachRaw.Value < 10.0)
+                {
+                    selectedMach = iasMachRaw.Value;
+                }
+                else
+                {
+                    selectedSpeedMetersPerSecond = TelemetryMath.KnotsToMetersPerSecond(iasMachRaw.Value);
+                }
+            }
+
+            double? selectedHeadingDegrees = FirstFinite(values, "MCP_Heading");
+            double? selectedAltitudeMeters = null;
+            double? altitudeRaw = FirstFinite(values, "MCP_Altitude");
+            if (altitudeRaw.HasValue)
+            {
+                selectedAltitudeMeters = TelemetryMath.FeetToMeters(altitudeRaw.Value);
+            }
+
+            double? selectedVerticalSpeedMetersPerSecond = null;
+            double? verticalSpeedRaw = FirstFinite(values, "MCP_VertSpeed");
+            if (verticalSpeedRaw.HasValue && verticalSpeedBlank != true)
+            {
+                selectedVerticalSpeedMetersPerSecond = TelemetryMath.FeetPerMinuteToMetersPerSecond(verticalSpeedRaw.Value);
+            }
+
+            bool? lnav = FirstKnownBoolean(values, "MCP_annunLNAV");
+            bool? vnav = FirstKnownBoolean(values, "MCP_annunVNAV");
+            bool? flch = FirstKnownBoolean(values, "MCP_annunFLCH");
+            bool? hdgHold = FirstKnownBoolean(values, "MCP_annunHDG_HOLD");
+            bool? vsFpa = FirstKnownBoolean(values, "MCP_annunVS_FPA");
+            bool? altHold = FirstKnownBoolean(values, "MCP_annunALT_HOLD");
+            bool? loc = FirstKnownBoolean(values, "MCP_annunLOC");
+            bool? app = FirstKnownBoolean(values, "MCP_annunAPP");
+
+            var modes = new List<string>();
+            AddMode(modes, lnav, "AUTOPILOT_MODE_LNAV");
+            AddMode(modes, vnav, "AUTOPILOT_MODE_VNAV");
+            AddMode(modes, flch, "AUTOPILOT_MODE_FLCH");
+            AddMode(modes, hdgHold, "AUTOPILOT_MODE_HEADING_HOLD");
+            AddMode(modes, vsFpa, "AUTOPILOT_MODE_VERTICAL_SPEED");
+            AddMode(modes, altHold, "AUTOPILOT_MODE_ALTITUDE_HOLD");
+            AddMode(modes, loc, "AUTOPILOT_MODE_LOC");
+            AddMode(modes, app, "AUTOPILOT_MODE_APPROACH");
+
+            var autopilotRaw = Collect(values, RequestedFields);
+
+            result.Apu = new AdapterApuState
+            {
+                Status = apuStatus,
+                Source = "pmdg-777-sdk",
+                SelectionReason = "PMDG 777 adapter overrides generic APU SimVars with PMDG SDK client data",
+                RawValues = apuRaw
+            };
+
+            result.Autopilot = new AdapterAutopilotState
+            {
+                Source = "pmdg-777-sdk",
+                SelectionReason = "PMDG 777 adapter overrides generic autoflight state with PMDG SDK client data",
+                FlightDirectorEnabled = flightDirector,
+                FlightDirector1Enabled = fd1,
+                FlightDirector2Enabled = fd2,
+                Ap1Engaged = ap1,
+                Ap2Engaged = ap2,
+                AutoThrottleArmed = autoThrottleArmed,
+                AutoThrottleActive = autoThrottleActive,
+                SelectedSpeedMetersPerSecond = selectedSpeedMetersPerSecond,
+                SelectedMach = selectedMach,
+                SelectedHeadingDegrees = selectedHeadingDegrees,
+                SelectedAltitudeMeters = selectedAltitudeMeters,
+                SelectedVerticalSpeedMetersPerSecond = selectedVerticalSpeedMetersPerSecond,
+                LateralMode = DetermineLateralMode(app, loc, lnav, hdgHold),
+                VerticalMode = DetermineVerticalMode(vnav, flch, altHold, vsFpa),
+                ManagedSpeed = vnav,
+                ManagedLateral = lnav,
+                ManagedVertical = vnav,
+                YawDamperEnabled = generic.YawDamperEnabled,
+                Modes = modes,
+                RawValues = autopilotRaw
+            };
+
+            return result;
+        }
+
+        private static IDictionary<string, double?> Collect(
+            IReadOnlyDictionary<string, double?> values,
+            params string[] names)
+        {
+            var collected = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
+
+            if (values == null)
+            {
+                return collected;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value))
+                {
+                    collected[names[i]] = value;
+                }
+            }
+
+            return collected;
+        }
+
+        private static double? FirstFinite(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            if (values == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value) &&
+                    value.HasValue &&
+                    !double.IsNaN(value.Value) &&
+                    !double.IsInfinity(value.Value))
+                {
+                    return value.Value;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool? FirstKnownBoolean(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            double? value = FirstFinite(values, names);
+            if (!value.HasValue)
+            {
+                return null;
+            }
+
+            return value.Value >= 0.5;
+        }
+
+        private static bool? AnyKnownBoolean(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            bool sawKnown = false;
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value = FirstFinite(values, names[i]);
+                if (!value.HasValue)
+                {
+                    continue;
+                }
+
+                sawKnown = true;
+                if (value.Value >= 0.5)
+                {
+                    return true;
+                }
+            }
+
+            if (!sawKnown)
+            {
+                return null;
+            }
+
+            return false;
+        }
+
+        private static bool? CombineConfirmed(bool? left, bool? right)
+        {
+            if (left == true || right == true)
+            {
+                return true;
+            }
+
+            if (left == false && right == false)
+            {
+                return false;
+            }
+
+            return null;
+        }
+
+        private static void AddMode(IList<string> modes, bool? enabled, string mode)
+        {
+            if (enabled == true)
+            {
+                modes.Add(mode);
+            }
+        }
+
+        private static string DetermineLateralMode(bool? app, bool? loc, bool? lnav, bool? hdgHold)
+        {
+            if (app == true) return "APP";
+            if (loc == true) return "LOC";
+            if (lnav == true) return "LNAV";
+            if (hdgHold == true) return "HDG_HOLD";
+            return null;
+        }
+
+        private static string DetermineVerticalMode(bool? vnav, bool? flch, bool? altHold, bool? vsFpa)
+        {
+            if (vnav == true) return "VNAV";
+            if (flch == true) return "FLCH";
+            if (altHold == true) return "ALT_HOLD";
+            if (vsFpa == true) return "VS_FPA";
+            return null;
         }
     }
 
@@ -886,10 +1286,89 @@ namespace SimpleSimConnector
             return identity != null &&
                 string.Equals(identity.DetectedFamily, "PMDG 737", StringComparison.OrdinalIgnoreCase);
         }
+
+        public override AircraftAdapterResult Evaluate(AircraftAdapterContext context)
+        {
+            return new AircraftAdapterResult
+            {
+                AdapterName = Name,
+                Identity = context != null ? context.Identity : null,
+                FenixDetected = false,
+                FenixLvarSource = "pmdg-737-sdk-unavailable",
+                FenixVariablesDiscovered = 0,
+                FenixVariablesReadable = 0,
+                Apu = new AdapterApuState
+                {
+                    Status = null,
+                    Source = "pmdg-737-sdk-unavailable",
+                    SelectionReason = "PMDG 737 detected but no PMDG 737 SDK integration is installed in this build",
+                    RawValues = new Dictionary<string, double?>()
+                },
+                Autopilot = new AdapterAutopilotState
+                {
+                    Source = "pmdg-737-sdk-unavailable",
+                    SelectionReason = "PMDG 737 detected but no PMDG 737 SDK integration is installed in this build",
+                    FlightDirectorEnabled = null,
+                    FlightDirector1Enabled = null,
+                    FlightDirector2Enabled = null,
+                    Ap1Engaged = null,
+                    Ap2Engaged = null,
+                    AutoThrottleArmed = null,
+                    AutoThrottleActive = null,
+                    SelectedSpeedMetersPerSecond = null,
+                    SelectedMach = null,
+                    SelectedHeadingDegrees = null,
+                    SelectedAltitudeMeters = null,
+                    SelectedVerticalSpeedMetersPerSecond = null,
+                    LateralMode = null,
+                    VerticalMode = null,
+                    ManagedSpeed = null,
+                    ManagedLateral = null,
+                    ManagedVertical = null,
+                    YawDamperEnabled = context != null && context.Generic != null ? context.Generic.YawDamperEnabled : null,
+                    Modes = new List<string>(),
+                    RawValues = new Dictionary<string, double?>()
+                }
+            };
+        }
     }
 
     public sealed class IniBuildsA340Adapter : GenericAircraftAdapter
     {
+        private static readonly string[] RequestedVariables =
+        {
+            "INI_AIR_BLEED_APU",
+            "INI_AP1_BUTTON",
+            "INI_ap1_on",
+            "INI_AP2_BUTTON",
+            "INI_ap2_on",
+            "INI_APU_AVAILABLE",
+            "INI_APU_MASTER_SWITCH",
+            "INI_APU_START_BUTTON",
+            "INI_ATHR_LIGHT",
+            "INI_AUTOLAND_LIGHT",
+            "INI_AUTOTHROTTLE_ARMED",
+            "INI_FCU_ALTITUDE_MODE_COMMAND",
+            "INI_FCU_HDG_VS_COMMAND",
+            "INI_FCU_MANAGED_HEADING_BUTTON",
+            "INI_FCU_MANAGED_SPEED_BUTTON",
+            "INI_FCU_METRIC_STATE",
+            "INI_FCU_SELECTED_HEADING_BUTTON",
+            "INI_FCU_SELECTED_SPEED_BUTTON",
+            "INI_FD1_ON",
+            "INI_FD2_ON",
+            "INI_GEN_APU_GEN_SWITCH",
+            "INI_MCU_LOC_LIGHT",
+            "INI_SPD_MACH_BUTTON"
+        };
+
+        private static readonly string[] DiscoveryKeywords =
+        {
+            "APU", "AP1", "AP2", "APPR", "ATHR", "AUTOLAND", "AUTOTHROTTLE",
+            "FCU", "FD", "HDG", "HEADING", "LOC", "MACH", "MANAGED",
+            "SELECTED", "SPD", "SPEED", "TRK", "FPA", "ALT", "VS", "VERT"
+        };
+
         public override string Name
         {
             get { return "IniBuildsA340Adapter"; }
@@ -900,10 +1379,297 @@ namespace SimpleSimConnector
             return identity != null &&
                 string.Equals(identity.DetectedFamily, "IniBuilds A340", StringComparison.OrdinalIgnoreCase);
         }
+
+        public static string[] GetDiscoveryKeywords()
+        {
+            return DiscoveryKeywords;
+        }
+
+        public static IList<string> GetRequestedVariables(ISet<string> discoveredVariables)
+        {
+            var requested = new List<string>();
+
+            for (int i = 0; i < RequestedVariables.Length; i++)
+            {
+                if (discoveredVariables != null && discoveredVariables.Contains(RequestedVariables[i]))
+                {
+                    requested.Add(RequestedVariables[i]);
+                }
+            }
+
+            return requested;
+        }
+
+        public override AircraftAdapterResult Evaluate(AircraftAdapterContext context)
+        {
+            GenericSystemsData generic = context != null && context.Generic != null
+                ? context.Generic
+                : new GenericSystemsData();
+
+            bool readable = context != null &&
+                context.CustomVariableValues != null &&
+                context.ReadableVariableCount > 0;
+
+            var result = new AircraftAdapterResult
+            {
+                AdapterName = Name,
+                Identity = context != null ? context.Identity : null,
+                FenixDetected = false,
+                FenixLvarSource = readable ? "direct-simconnect" : "unavailable",
+                FenixVariablesDiscovered = context != null ? context.DiscoveredVariableCount : 0,
+                FenixVariablesReadable = context != null ? context.ReadableVariableCount : 0
+            };
+
+            if (!readable)
+            {
+                result.Apu = new AdapterApuState
+                {
+                    Status = null,
+                    Source = "inibuilds-a340-lvar-unavailable",
+                    SelectionReason = "IniBuilds A340 detected but no readable custom LVars are available",
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                result.Autopilot = new AdapterAutopilotState
+                {
+                    Source = "inibuilds-a340-lvar-unavailable",
+                    SelectionReason = "IniBuilds A340 detected but no readable custom autoflight LVars are available",
+                    FlightDirectorEnabled = null,
+                    FlightDirector1Enabled = null,
+                    FlightDirector2Enabled = null,
+                    Ap1Engaged = null,
+                    Ap2Engaged = null,
+                    AutoThrottleArmed = null,
+                    AutoThrottleActive = null,
+                    SelectedSpeedMetersPerSecond = null,
+                    SelectedMach = null,
+                    SelectedHeadingDegrees = null,
+                    SelectedAltitudeMeters = null,
+                    SelectedVerticalSpeedMetersPerSecond = null,
+                    LateralMode = null,
+                    VerticalMode = null,
+                    ManagedSpeed = null,
+                    ManagedLateral = null,
+                    ManagedVertical = null,
+                    YawDamperEnabled = null,
+                    Modes = new List<string>(),
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                return result;
+            }
+
+            IReadOnlyDictionary<string, double?> values = context.CustomVariableValues;
+            var apuRaw = Collect(values,
+                "INI_APU_AVAILABLE",
+                "INI_APU_MASTER_SWITCH",
+                "INI_APU_START_BUTTON",
+                "INI_GEN_APU_GEN_SWITCH",
+                "INI_AIR_BLEED_APU");
+
+            bool? apuAvailable = FirstKnownBoolean(values, "INI_APU_AVAILABLE");
+            bool? apuMaster = FirstKnownBoolean(values, "INI_APU_MASTER_SWITCH");
+            bool? apuStart = FirstKnownBoolean(values, "INI_APU_START_BUTTON");
+            bool? apuGenerator = FirstKnownBoolean(values, "INI_GEN_APU_GEN_SWITCH");
+            bool? apuBleed = FirstKnownBoolean(values, "INI_AIR_BLEED_APU");
+
+            string apuStatus;
+            if (apuBleed == true) apuStatus = "bleed_on";
+            else if (apuAvailable == true) apuStatus = "available";
+            else if (apuStart == true) apuStatus = "starting";
+            else if (apuGenerator == true) apuStatus = "running";
+            else if (apuMaster == true) apuStatus = "unknown";
+            else if (AllKnownFalse(apuBleed, apuAvailable, apuStart, apuGenerator, apuMaster)) apuStatus = "off";
+            else apuStatus = "unknown";
+
+            bool? flightDirector1 = FirstKnownBoolean(values, "INI_FD1_ON");
+            bool? flightDirector2 = FirstKnownBoolean(values, "INI_FD2_ON");
+            bool? flightDirector;
+            if (flightDirector1 == true || flightDirector2 == true)
+            {
+                flightDirector = true;
+            }
+            else if (flightDirector1 == false && flightDirector2 == false)
+            {
+                flightDirector = false;
+            }
+            else
+            {
+                flightDirector = null;
+            }
+
+            bool? ap1 = FirstKnownBoolean(values, "INI_ap1_on", "INI_AP1_BUTTON");
+            bool? ap2 = FirstKnownBoolean(values, "INI_ap2_on", "INI_AP2_BUTTON");
+            bool? autoThrottleArmed = FirstKnownBoolean(values, "INI_AUTOTHROTTLE_ARMED");
+            bool? autoThrottleActive = FirstKnownBoolean(values, "INI_ATHR_LIGHT");
+            bool? managedSpeed = FirstKnownBoolean(values, "INI_FCU_MANAGED_SPEED_BUTTON");
+            bool? selectedSpeedMode = FirstKnownBoolean(values, "INI_FCU_SELECTED_SPEED_BUTTON");
+            bool? managedLateral = FirstKnownBoolean(values, "INI_FCU_MANAGED_HEADING_BUTTON");
+            bool? selectedHeadingMode = FirstKnownBoolean(values, "INI_FCU_SELECTED_HEADING_BUTTON");
+            bool? altitudeModeCommand = FirstKnownBoolean(values, "INI_FCU_ALTITUDE_MODE_COMMAND");
+            bool? speedMachMode = FirstKnownBoolean(values, "INI_SPD_MACH_BUTTON");
+            bool? locMode = FirstKnownBoolean(values, "INI_MCU_LOC_LIGHT");
+            bool? autolandMode = FirstKnownBoolean(values, "INI_AUTOLAND_LIGHT");
+
+            var autopilotRaw = Collect(values,
+                "INI_AP1_BUTTON",
+                "INI_ap1_on",
+                "INI_AP2_BUTTON",
+                "INI_ap2_on",
+                "INI_AUTOTHROTTLE_ARMED",
+                "INI_ATHR_LIGHT",
+                "INI_FD1_ON",
+                "INI_FD2_ON",
+                "INI_MCU_LOC_LIGHT",
+                "INI_AUTOLAND_LIGHT",
+                "INI_FCU_MANAGED_SPEED_BUTTON",
+                "INI_FCU_SELECTED_SPEED_BUTTON",
+                "INI_FCU_MANAGED_HEADING_BUTTON",
+                "INI_FCU_SELECTED_HEADING_BUTTON",
+                "INI_FCU_ALTITUDE_MODE_COMMAND",
+                "INI_FCU_HDG_VS_COMMAND",
+                "INI_SPD_MACH_BUTTON",
+                "INI_FCU_METRIC_STATE");
+
+            result.Apu = new AdapterApuState
+            {
+                Status = apuStatus,
+                Source = "inibuilds-a340-lvar",
+                SelectionReason = "IniBuilds A340 adapter overrides generic APU SimVars",
+                RawValues = apuRaw
+            };
+
+            result.Autopilot = new AdapterAutopilotState
+            {
+                Source = "inibuilds-a340-lvar",
+                SelectionReason = "IniBuilds A340 adapter overrides generic autoflight state with readable custom LVars",
+                FlightDirectorEnabled = flightDirector,
+                FlightDirector1Enabled = flightDirector1,
+                FlightDirector2Enabled = flightDirector2,
+                Ap1Engaged = ap1,
+                Ap2Engaged = ap2,
+                AutoThrottleArmed = autoThrottleArmed,
+                AutoThrottleActive = autoThrottleActive,
+                SelectedSpeedMetersPerSecond = speedMachMode == true ? null : generic.AirspeedHoldMetersPerSecond,
+                SelectedMach = speedMachMode == true ? generic.MachHoldMach : null,
+                SelectedHeadingDegrees = generic.HeadingLockDegrees,
+                SelectedAltitudeMeters = generic.AltitudeHoldMeters,
+                SelectedVerticalSpeedMetersPerSecond = generic.VerticalSpeedHoldMetersPerSecond,
+                LateralMode = locMode == true ? "LOC" : null,
+                VerticalMode = autolandMode == true ? "AUTOLAND" : null,
+                ManagedSpeed = managedSpeed == true ? true : selectedSpeedMode == true ? (bool?)false : null,
+                ManagedLateral = managedLateral == true ? true : selectedHeadingMode == true ? (bool?)false : null,
+                ManagedVertical = altitudeModeCommand,
+                YawDamperEnabled = generic.YawDamperEnabled,
+                Modes = new List<string>(),
+                RawValues = autopilotRaw
+            };
+
+            return result;
+        }
+
+        private static IDictionary<string, double?> Collect(
+            IReadOnlyDictionary<string, double?> values,
+            params string[] names)
+        {
+            var collected = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
+
+            if (values == null)
+            {
+                return collected;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value))
+                {
+                    collected[names[i]] = value;
+                }
+            }
+
+            return collected;
+        }
+
+        private static bool? FirstKnownBoolean(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            if (values == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value) &&
+                    value.HasValue &&
+                    !double.IsNaN(value.Value) &&
+                    !double.IsInfinity(value.Value))
+                {
+                    return value.Value >= 0.5;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool AllKnownFalse(params bool?[] values)
+        {
+            bool sawKnown = false;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (!values[i].HasValue)
+                {
+                    continue;
+                }
+
+                sawKnown = true;
+                if (values[i].Value)
+                {
+                    return false;
+                }
+            }
+
+            return sawKnown;
+        }
     }
 
     public sealed class IniBuildsA350Adapter : GenericAircraftAdapter
     {
+        private static readonly string[] RequestedVariables =
+        {
+            "INI_AIR_BLEED_APU",
+            "INI_AP1_BUTTON",
+            "INI_ap1_on",
+            "INI_AP2_BUTTON",
+            "INI_ap2_on",
+            "INI_APU_AVAILABLE",
+            "INI_APU_MASTER_SWITCH",
+            "INI_APU_START_BUTTON",
+            "INI_ATHR_LIGHT",
+            "INI_AUTOLAND_LIGHT",
+            "INI_AUTOTHROTTLE_ARMED",
+            "INI_FCU_ALTITUDE_MODE_COMMAND",
+            "INI_FCU_HDG_VS_COMMAND",
+            "INI_FCU_MANAGED_HEADING_BUTTON",
+            "INI_FCU_MANAGED_SPEED_BUTTON",
+            "INI_FCU_METRIC_STATE",
+            "INI_FCU_SELECTED_HEADING_BUTTON",
+            "INI_FCU_SELECTED_SPEED_BUTTON",
+            "INI_FD_ON",
+            "INI_GEN_APU_GEN_SWITCH",
+            "INI_MCU_LOC_LIGHT",
+            "INI_SPD_MACH_BUTTON"
+        };
+
+        private static readonly string[] DiscoveryKeywords =
+        {
+            "APU", "AP1", "AP2", "APPR", "ATHR", "AUTOLAND", "AUTOTHROTTLE",
+            "FCU", "FD", "HDG", "HEADING", "LOC", "MACH", "MANAGED",
+            "SELECTED", "SPD", "SPEED", "TRK", "FPA", "ALT", "VS", "VERT"
+        };
+
         public override string Name
         {
             get { return "IniBuildsA350Adapter"; }
@@ -913,6 +1679,245 @@ namespace SimpleSimConnector
         {
             return identity != null &&
                 string.Equals(identity.DetectedFamily, "IniBuilds A350", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string[] GetDiscoveryKeywords()
+        {
+            return DiscoveryKeywords;
+        }
+
+        public static IList<string> GetRequestedVariables(ISet<string> discoveredVariables)
+        {
+            var requested = new List<string>();
+
+            for (int i = 0; i < RequestedVariables.Length; i++)
+            {
+                if (discoveredVariables != null && discoveredVariables.Contains(RequestedVariables[i]))
+                {
+                    requested.Add(RequestedVariables[i]);
+                }
+            }
+
+            return requested;
+        }
+
+        public override AircraftAdapterResult Evaluate(AircraftAdapterContext context)
+        {
+            GenericSystemsData generic = context != null && context.Generic != null
+                ? context.Generic
+                : new GenericSystemsData();
+
+            bool readable = context != null &&
+                context.CustomVariableValues != null &&
+                context.ReadableVariableCount > 0;
+
+            var result = new AircraftAdapterResult
+            {
+                AdapterName = Name,
+                Identity = context != null ? context.Identity : null,
+                FenixDetected = false,
+                FenixLvarSource = readable ? "direct-simconnect" : "unavailable",
+                FenixVariablesDiscovered = context != null ? context.DiscoveredVariableCount : 0,
+                FenixVariablesReadable = context != null ? context.ReadableVariableCount : 0
+            };
+
+            if (!readable)
+            {
+                result.Apu = new AdapterApuState
+                {
+                    Status = null,
+                    Source = "inibuilds-a350-lvar-unavailable",
+                    SelectionReason = "IniBuilds A350 detected but no readable custom LVars are available",
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                result.Autopilot = new AdapterAutopilotState
+                {
+                    Source = "inibuilds-a350-lvar-unavailable",
+                    SelectionReason = "IniBuilds A350 detected but no readable custom autoflight LVars are available",
+                    FlightDirectorEnabled = null,
+                    FlightDirector1Enabled = null,
+                    FlightDirector2Enabled = null,
+                    Ap1Engaged = null,
+                    Ap2Engaged = null,
+                    AutoThrottleArmed = null,
+                    AutoThrottleActive = null,
+                    SelectedSpeedMetersPerSecond = null,
+                    SelectedMach = null,
+                    SelectedHeadingDegrees = null,
+                    SelectedAltitudeMeters = null,
+                    SelectedVerticalSpeedMetersPerSecond = null,
+                    LateralMode = null,
+                    VerticalMode = null,
+                    ManagedSpeed = null,
+                    ManagedLateral = null,
+                    ManagedVertical = null,
+                    YawDamperEnabled = null,
+                    Modes = new List<string>(),
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                return result;
+            }
+
+            IReadOnlyDictionary<string, double?> values = context.CustomVariableValues;
+            var apuRaw = Collect(values,
+                "INI_APU_AVAILABLE",
+                "INI_APU_MASTER_SWITCH",
+                "INI_APU_START_BUTTON",
+                "INI_GEN_APU_GEN_SWITCH",
+                "INI_AIR_BLEED_APU");
+
+            bool? apuAvailable = FirstKnownBoolean(values, "INI_APU_AVAILABLE");
+            bool? apuMaster = FirstKnownBoolean(values, "INI_APU_MASTER_SWITCH");
+            bool? apuStart = FirstKnownBoolean(values, "INI_APU_START_BUTTON");
+            bool? apuGenerator = FirstKnownBoolean(values, "INI_GEN_APU_GEN_SWITCH");
+            bool? apuBleed = FirstKnownBoolean(values, "INI_AIR_BLEED_APU");
+
+            string apuStatus;
+            if (apuBleed == true) apuStatus = "bleed_on";
+            else if (apuAvailable == true) apuStatus = "available";
+            else if (apuStart == true) apuStatus = "starting";
+            else if (apuGenerator == true) apuStatus = "running";
+            else if (apuMaster == true) apuStatus = "unknown";
+            else if (AllKnownFalse(apuBleed, apuAvailable, apuStart, apuGenerator, apuMaster)) apuStatus = "off";
+            else apuStatus = "unknown";
+
+            bool? flightDirector = FirstKnownBoolean(values, "INI_FD_ON");
+            bool? ap1 = FirstKnownBoolean(values, "INI_ap1_on", "INI_AP1_BUTTON");
+            bool? ap2 = FirstKnownBoolean(values, "INI_ap2_on", "INI_AP2_BUTTON");
+            bool? autoThrottleArmed = FirstKnownBoolean(values, "INI_AUTOTHROTTLE_ARMED");
+            bool? autoThrottleActive = FirstKnownBoolean(values, "INI_ATHR_LIGHT");
+            bool? managedSpeed = FirstKnownBoolean(values, "INI_FCU_MANAGED_SPEED_BUTTON");
+            bool? selectedSpeedMode = FirstKnownBoolean(values, "INI_FCU_SELECTED_SPEED_BUTTON");
+            bool? managedLateral = FirstKnownBoolean(values, "INI_FCU_MANAGED_HEADING_BUTTON");
+            bool? selectedHeadingMode = FirstKnownBoolean(values, "INI_FCU_SELECTED_HEADING_BUTTON");
+            bool? altitudeModeCommand = FirstKnownBoolean(values, "INI_FCU_ALTITUDE_MODE_COMMAND");
+            bool? trkFpaMode = FirstKnownBoolean(values, "INI_FCU_HDG_VS_COMMAND");
+            bool? speedMachMode = FirstKnownBoolean(values, "INI_SPD_MACH_BUTTON");
+            bool? locMode = FirstKnownBoolean(values, "INI_MCU_LOC_LIGHT");
+            bool? autolandMode = FirstKnownBoolean(values, "INI_AUTOLAND_LIGHT");
+
+            var autopilotRaw = Collect(values,
+                "INI_AP1_BUTTON",
+                "INI_ap1_on",
+                "INI_AP2_BUTTON",
+                "INI_ap2_on",
+                "INI_AUTOTHROTTLE_ARMED",
+                "INI_ATHR_LIGHT",
+                "INI_FD_ON",
+                "INI_MCU_LOC_LIGHT",
+                "INI_AUTOLAND_LIGHT",
+                "INI_FCU_MANAGED_SPEED_BUTTON",
+                "INI_FCU_SELECTED_SPEED_BUTTON",
+                "INI_FCU_MANAGED_HEADING_BUTTON",
+                "INI_FCU_SELECTED_HEADING_BUTTON",
+                "INI_FCU_ALTITUDE_MODE_COMMAND",
+                "INI_FCU_HDG_VS_COMMAND",
+                "INI_SPD_MACH_BUTTON",
+                "INI_FCU_METRIC_STATE");
+
+            result.Apu = new AdapterApuState
+            {
+                Status = apuStatus,
+                Source = "inibuilds-a350-lvar",
+                SelectionReason = "IniBuilds A350 adapter overrides generic APU SimVars",
+                RawValues = apuRaw
+            };
+
+            result.Autopilot = new AdapterAutopilotState
+            {
+                Source = "inibuilds-a350-lvar",
+                SelectionReason = "IniBuilds A350 adapter overrides generic autoflight state with readable custom LVars",
+                FlightDirectorEnabled = flightDirector,
+                FlightDirector1Enabled = flightDirector,
+                FlightDirector2Enabled = flightDirector,
+                Ap1Engaged = ap1,
+                Ap2Engaged = ap2,
+                AutoThrottleArmed = autoThrottleArmed,
+                AutoThrottleActive = autoThrottleActive,
+                SelectedSpeedMetersPerSecond = speedMachMode == true ? null : generic.AirspeedHoldMetersPerSecond,
+                SelectedMach = speedMachMode == true ? generic.MachHoldMach : null,
+                SelectedHeadingDegrees = generic.HeadingLockDegrees,
+                SelectedAltitudeMeters = generic.AltitudeHoldMeters,
+                SelectedVerticalSpeedMetersPerSecond = generic.VerticalSpeedHoldMetersPerSecond,
+                LateralMode = locMode == true ? "LOC" : null,
+                VerticalMode = autolandMode == true ? "AUTOLAND" : null,
+                ManagedSpeed = managedSpeed == true ? true : selectedSpeedMode == true ? (bool?)false : null,
+                ManagedLateral = managedLateral == true ? true : selectedHeadingMode == true ? (bool?)false : null,
+                ManagedVertical = altitudeModeCommand,
+                YawDamperEnabled = generic.YawDamperEnabled,
+                Modes = new List<string>(),
+                RawValues = autopilotRaw
+            };
+
+            return result;
+        }
+
+        private static IDictionary<string, double?> Collect(
+            IReadOnlyDictionary<string, double?> values,
+            params string[] names)
+        {
+            var collected = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
+
+            if (values == null)
+            {
+                return collected;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value))
+                {
+                    collected[names[i]] = value;
+                }
+            }
+
+            return collected;
+        }
+
+        private static bool? FirstKnownBoolean(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            if (values == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value) &&
+                    value.HasValue &&
+                    !double.IsNaN(value.Value) &&
+                    !double.IsInfinity(value.Value))
+                {
+                    return value.Value >= 0.5;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool AllKnownFalse(params bool?[] values)
+        {
+            bool sawKnown = false;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (!values[i].HasValue)
+                {
+                    continue;
+                }
+
+                sawKnown = true;
+                if (values[i].Value)
+                {
+                    return false;
+                }
+            }
+
+            return sawKnown;
         }
     }
 }

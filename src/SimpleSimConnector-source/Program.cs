@@ -47,6 +47,13 @@ namespace SimpleSimConnector
         Frame
     }
 
+    enum PMDG777_CLIENT_DATA
+    {
+        DataArea = 0x504D4447,
+        DataDefinition = 0x504D4448,
+        DataRequest = 0x504D4449
+    }
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
     struct IdentityData
     {
@@ -175,6 +182,35 @@ namespace SimpleSimConnector
         public double autopilotAirspeedHoldActive;
         public double autopilotMachHoldActive;
         public double autopilotVerticalSpeedHoldActive;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+    struct Pmdg777Data
+    {
+        public byte elecApuGenSwitchOn;
+        public byte elecApuSelector;
+        public byte airApuBleedAirSwitchAuto;
+        public float mcpIasMach;
+        public byte mcpIasBlank;
+        public ushort mcpHeading;
+        public ushort mcpAltitude;
+        public short mcpVertSpeed;
+        public byte mcpVertSpeedBlank;
+        public byte mcpFdSwitchOnLeft;
+        public byte mcpFdSwitchOnRight;
+        public byte mcpAtArmSwitchOnLeft;
+        public byte mcpAtArmSwitchOnRight;
+        public byte mcpAnnunApLeft;
+        public byte mcpAnnunApRight;
+        public byte mcpAnnunAt;
+        public byte mcpAnnunLnav;
+        public byte mcpAnnunVnav;
+        public byte mcpAnnunFlch;
+        public byte mcpAnnunHdgHold;
+        public byte mcpAnnunVsFpa;
+        public byte mcpAnnunAltHold;
+        public byte mcpAnnunLoc;
+        public byte mcpAnnunApp;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
@@ -312,10 +348,13 @@ namespace SimpleSimConnector
         private readonly HashSet<string> fenixReadableVarNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> fenixDiscoveredVarSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> fenixDiscoveredVars = new List<string>();
+        private readonly Dictionary<string, double?> pmdg777SdkValues = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
         private IAircraftAdapter activeAircraftAdapter = new GenericAircraftAdapter();
         private AircraftIdentityInfo latestAircraftIdentity = AircraftAdapterFactory.ResolveIdentity("", "", "", "");
         private string fenixCockpitBehaviorPath = "";
         private string fenixPackagePath = "";
+        private bool pmdg777ClientDataRequested = false;
+        private bool pmdg777ClientDataAvailable = false;
 
         private const int FenixDefinitionBase = 1000;
         private const int FenixRequestBase = 2000;
@@ -963,6 +1002,7 @@ namespace SimpleSimConnector
                 simconnect.OnRecvException += OnSimException;
                 simconnect.OnRecvEventFrame += OnFrameEvent;
                 simconnect.OnRecvSimobjectData += OnTelemetryReceived;
+                simconnect.OnRecvClientData += OnClientDataReceived;
 
                 Log("SimConnect object created.");
                 SetStatus("SimConnect object created. Waiting for MSFS...");
@@ -1016,6 +1056,9 @@ namespace SimpleSimConnector
             fenixReadableVarNames.Clear();
             fenixDiscoveredVarSet.Clear();
             fenixDiscoveredVars.Clear();
+            pmdg777SdkValues.Clear();
+            pmdg777ClientDataRequested = false;
+            pmdg777ClientDataAvailable = false;
             fenixCockpitBehaviorPath = "";
             fenixPackagePath = "";
 
@@ -1165,7 +1208,7 @@ namespace SimpleSimConnector
                     latestAircraftTitle = Clean(identity.title);
                     latestAircraftIdentity = BuildAircraftIdentity(identity);
                     activeAircraftAdapter = AircraftAdapterFactory.ResolveAdapter(latestAircraftIdentity);
-                    EnsureFenixLvarRequests();
+                    EnsureCustomLvarRequests();
                     return;
                 }
 
@@ -1263,6 +1306,25 @@ namespace SimpleSimConnector
             {
                 backendConnected = false;
                 Log("Backend upload failed: " + ex.Message);
+            }
+        }
+
+        private void OnClientDataReceived(SimConnect sender, SIMCONNECT_RECV_CLIENT_DATA data)
+        {
+            try
+            {
+                if ((PMDG777_CLIENT_DATA)data.dwRequestID != PMDG777_CLIENT_DATA.DataRequest)
+                {
+                    return;
+                }
+
+                var pmdgData = (Pmdg777Data)data.dwData[0];
+                pmdg777ClientDataAvailable = true;
+                UpdatePmdg777SdkValues(pmdgData);
+            }
+            catch (Exception ex)
+            {
+                Log("PMDG 777 client data error: " + ex.Message);
             }
         }
 
@@ -1413,16 +1475,44 @@ namespace SimpleSimConnector
                 Clean(identityData.atcType),
                 "");
 
-            if (!string.Equals(baseIdentity.DetectedFamily, "Fenix A32x", StringComparison.OrdinalIgnoreCase))
-            {
-                return "";
-            }
-
             string appDataPackagesRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "Microsoft Flight Simulator 2024",
                 "Packages",
                 "Community");
+
+            if (string.Equals(baseIdentity.DetectedFamily, "IniBuilds A350", StringComparison.OrdinalIgnoreCase))
+            {
+                string a350Package = Path.Combine(appDataPackagesRoot, "inibuilds-aircraft-a350");
+                if (Directory.Exists(a350Package))
+                {
+                    return a350Package;
+                }
+
+                return "";
+            }
+
+            if (string.Equals(baseIdentity.DetectedFamily, "IniBuilds A340", StringComparison.OrdinalIgnoreCase))
+            {
+                string a340Package = Path.Combine(appDataPackagesRoot, "inibuilds-aircraft-a340");
+                if (Directory.Exists(a340Package))
+                {
+                    return a340Package;
+                }
+
+                string legacyA340Package = Path.Combine(appDataPackagesRoot, "ini-builds-airbus-a340-v1.0.7-2024");
+                if (Directory.Exists(legacyA340Package))
+                {
+                    return legacyA340Package;
+                }
+
+                return "";
+            }
+
+            if (!string.Equals(baseIdentity.DetectedFamily, "Fenix A32x", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
 
             string preferredPackage = "";
             if (string.Equals(baseIdentity.DetectedVariant, "A320", StringComparison.OrdinalIgnoreCase))
@@ -1455,17 +1545,61 @@ namespace SimpleSimConnector
             return "";
         }
 
-        private void EnsureFenixLvarRequests()
+        private void EnsureCustomLvarRequests()
         {
-            if (!(activeAircraftAdapter is FenixA32xAdapter) || simconnect == null || fenixRequestIdToVarName.Count > 0)
+            if (simconnect == null)
             {
                 return;
             }
 
             fenixPackagePath = latestAircraftIdentity != null ? Clean(latestAircraftIdentity.PackagePath) : "";
-            fenixCockpitBehaviorPath = FindFenixCockpitBehaviorPath(latestAircraftIdentity);
 
-            FenixVariableDiscoveryResult discovery = FenixVariableDiscovery.DiscoverFromXml(fenixCockpitBehaviorPath);
+            if (activeAircraftAdapter is Pmdg777Adapter)
+            {
+                EnsurePmdg777SdkRequest();
+                return;
+            }
+
+            if (fenixRequestIdToVarName.Count > 0)
+            {
+                return;
+            }
+
+            string adapterName = activeAircraftAdapter != null ? activeAircraftAdapter.Name : "GenericAircraftAdapter";
+            string discoveryLabel;
+            FenixVariableDiscoveryResult discovery;
+            IList<string> requestedVariables;
+
+            if (activeAircraftAdapter is FenixA32xAdapter)
+            {
+                fenixCockpitBehaviorPath = FindFenixCockpitBehaviorPath(latestAircraftIdentity);
+                discovery = FenixVariableDiscovery.DiscoverFromXml(fenixCockpitBehaviorPath);
+                requestedVariables = FenixA32xAdapter.GetRequestedVariables(discovery.CandidateVariableSet);
+                discoveryLabel = "Fenix";
+            }
+            else if (activeAircraftAdapter is IniBuildsA350Adapter)
+            {
+                fenixCockpitBehaviorPath = FindIniBuildsA350BehaviorPath(latestAircraftIdentity);
+                discovery = IniBuildsVariableDiscovery.DiscoverLvarsFromBehaviorXml(
+                    fenixCockpitBehaviorPath,
+                    IniBuildsA350Adapter.GetDiscoveryKeywords());
+                requestedVariables = IniBuildsA350Adapter.GetRequestedVariables(discovery.CandidateVariableSet);
+                discoveryLabel = "IniBuilds A350";
+            }
+            else if (activeAircraftAdapter is IniBuildsA340Adapter)
+            {
+                fenixCockpitBehaviorPath = FindIniBuildsA340BehaviorPath(latestAircraftIdentity);
+                discovery = IniBuildsVariableDiscovery.DiscoverLvarsFromBehaviorXml(
+                    fenixCockpitBehaviorPath,
+                    IniBuildsA340Adapter.GetDiscoveryKeywords());
+                requestedVariables = IniBuildsA340Adapter.GetRequestedVariables(discovery.CandidateVariableSet);
+                discoveryLabel = "IniBuilds A340";
+            }
+            else
+            {
+                return;
+            }
+
             fenixDiscoveredVars.Clear();
             fenixDiscoveredVarSet.Clear();
 
@@ -1475,23 +1609,81 @@ namespace SimpleSimConnector
                 fenixDiscoveredVarSet.Add(variable);
             }
 
-            Log("Fenix cockpit behavior path: " + (discovery.CockpitBehaviorPath ?? ""));
+            Log(adapterName + " behavior path: " + (discovery.CockpitBehaviorPath ?? ""));
             if (fenixDiscoveredVars.Count > 0)
             {
-                Log("Fenix candidate VAR_NAME list (" + fenixDiscoveredVars.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", fenixDiscoveredVars.ToArray()));
+                Log(discoveryLabel + " candidate variable list (" + fenixDiscoveredVars.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", fenixDiscoveredVars.ToArray()));
             }
             else
             {
-                Log("Fenix candidate VAR_NAME list is empty.");
+                Log(discoveryLabel + " candidate variable list is empty.");
             }
 
-            IList<string> requestedVariables = FenixA32xAdapter.GetRequestedVariables(fenixDiscoveredVarSet);
             for (int i = 0; i < requestedVariables.Count; i++)
             {
                 RegisterFenixLvarDefinition(requestedVariables[i], i);
             }
 
-            Log("Fenix requested LVars (" + requestedVariables.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", requestedVariables));
+            Log(discoveryLabel + " requested LVars (" + requestedVariables.Count.ToString(CultureInfo.InvariantCulture) + "): " + string.Join(", ", requestedVariables));
+        }
+
+        private void EnsurePmdg777SdkRequest()
+        {
+            if (simconnect == null || pmdg777ClientDataRequested)
+            {
+                return;
+            }
+
+            simconnect.MapClientDataNameToID("PMDG_777X_Data", PMDG777_CLIENT_DATA.DataArea);
+
+            AddPmdg777ClientDataField(40, 1);
+            AddPmdg777ClientDataField(41, 1);
+            AddPmdg777ClientDataField(194, 1);
+            AddPmdg777ClientDataField(308, 4);
+            AddPmdg777ClientDataField(312, 1);
+            AddPmdg777ClientDataField(314, 2);
+            AddPmdg777ClientDataField(316, 2);
+            AddPmdg777ClientDataField(318, 2);
+            AddPmdg777ClientDataField(354, 1);
+            AddPmdg777ClientDataField(325, 1);
+            AddPmdg777ClientDataField(326, 1);
+            AddPmdg777ClientDataField(327, 1);
+            AddPmdg777ClientDataField(328, 1);
+            AddPmdg777ClientDataField(356, 1);
+            AddPmdg777ClientDataField(357, 1);
+            AddPmdg777ClientDataField(358, 1);
+            AddPmdg777ClientDataField(359, 1);
+            AddPmdg777ClientDataField(360, 1);
+            AddPmdg777ClientDataField(361, 1);
+            AddPmdg777ClientDataField(362, 1);
+            AddPmdg777ClientDataField(363, 1);
+            AddPmdg777ClientDataField(364, 1);
+            AddPmdg777ClientDataField(365, 1);
+            AddPmdg777ClientDataField(366, 1);
+
+            simconnect.RegisterDataDefineStruct<Pmdg777Data>(PMDG777_CLIENT_DATA.DataDefinition);
+            simconnect.RequestClientData(
+                PMDG777_CLIENT_DATA.DataArea,
+                PMDG777_CLIENT_DATA.DataRequest,
+                PMDG777_CLIENT_DATA.DataDefinition,
+                SIMCONNECT_CLIENT_DATA_PERIOD.VISUAL_FRAME,
+                SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.CHANGED,
+                0,
+                0,
+                0);
+
+            pmdg777ClientDataRequested = true;
+            Log("PMDG 777 SDK client data request registered.");
+        }
+
+        private void AddPmdg777ClientDataField(uint offset, uint size)
+        {
+            simconnect.AddToClientDataDefinition(
+                PMDG777_CLIENT_DATA.DataDefinition,
+                offset,
+                size,
+                0,
+                SimConnect.SIMCONNECT_UNUSED);
         }
 
         private string FindFenixCockpitBehaviorPath(AircraftIdentityInfo identity)
@@ -1532,6 +1724,112 @@ namespace SimpleSimConnector
             return "";
         }
 
+        private string FindIniBuildsA350BehaviorPath(AircraftIdentityInfo identity)
+        {
+            var candidates = new List<string>();
+
+            if (identity != null && !string.IsNullOrWhiteSpace(identity.PackagePath))
+            {
+                candidates.Add(Path.Combine(
+                    identity.PackagePath,
+                    "SimObjects",
+                    "Airplanes",
+                    "A350",
+                    "attachments",
+                    "inibuilds",
+                    "Function_Interior_A350",
+                    "model",
+                    "A350_Interior.behavior.xml"));
+            }
+
+            string appDataPackagesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft Flight Simulator 2024",
+                "Packages",
+                "Community");
+
+            candidates.Add(Path.Combine(
+                appDataPackagesRoot,
+                "inibuilds-aircraft-a350",
+                "SimObjects",
+                "Airplanes",
+                "A350",
+                "attachments",
+                "inibuilds",
+                "Function_Interior_A350",
+                "model",
+                "A350_Interior.behavior.xml"));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (File.Exists(candidates[i]))
+                {
+                    return candidates[i];
+                }
+            }
+
+            return "";
+        }
+
+        private string FindIniBuildsA340BehaviorPath(AircraftIdentityInfo identity)
+        {
+            var candidates = new List<string>();
+
+            if (identity != null && !string.IsNullOrWhiteSpace(identity.PackagePath))
+            {
+                candidates.Add(Path.Combine(
+                    identity.PackagePath,
+                    "SimObjects",
+                    "Airplanes",
+                    "inibuilds-a340",
+                    "attachments",
+                    "inibuilds",
+                    "Function_A343_Interior_EIS1",
+                    "model",
+                    "A343_Interior_EIS1.behavior.xml"));
+            }
+
+            string appDataPackagesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft Flight Simulator 2024",
+                "Packages",
+                "Community");
+
+            candidates.Add(Path.Combine(
+                appDataPackagesRoot,
+                "inibuilds-aircraft-a340",
+                "SimObjects",
+                "Airplanes",
+                "inibuilds-a340",
+                "attachments",
+                "inibuilds",
+                "Function_A343_Interior_EIS1",
+                "model",
+                "A343_Interior_EIS1.behavior.xml"));
+
+            candidates.Add(Path.Combine(
+                appDataPackagesRoot,
+                "ini-builds-airbus-a340-v1.0.7-2024",
+                "SimObjects",
+                "Airplanes",
+                "inibuilds-a340",
+                "attachments",
+                "inibuilds",
+                "Function_A343_Interior_EIS1",
+                "model",
+                "A343_Interior_EIS1.behavior.xml"));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (File.Exists(candidates[i]))
+                {
+                    return candidates[i];
+                }
+            }
+
+            return "";
+        }
+
         private void RegisterFenixLvarDefinition(string varName, int index)
         {
             int definitionId = FenixDefinitionBase + index;
@@ -1560,6 +1858,34 @@ namespace SimpleSimConnector
                 0);
         }
 
+        private void UpdatePmdg777SdkValues(Pmdg777Data data)
+        {
+            pmdg777SdkValues["ELEC_APUGen_Sw_ON"] = data.elecApuGenSwitchOn;
+            pmdg777SdkValues["ELEC_APU_Selector"] = data.elecApuSelector;
+            pmdg777SdkValues["AIR_APUBleedAir_Sw_AUTO"] = data.airApuBleedAirSwitchAuto;
+            pmdg777SdkValues["MCP_IASMach"] = data.mcpIasMach;
+            pmdg777SdkValues["MCP_IASBlank"] = data.mcpIasBlank;
+            pmdg777SdkValues["MCP_Heading"] = data.mcpHeading;
+            pmdg777SdkValues["MCP_Altitude"] = data.mcpAltitude;
+            pmdg777SdkValues["MCP_VertSpeed"] = data.mcpVertSpeed;
+            pmdg777SdkValues["MCP_VertSpeedBlank"] = data.mcpVertSpeedBlank;
+            pmdg777SdkValues["MCP_FD_Sw_On_L"] = data.mcpFdSwitchOnLeft;
+            pmdg777SdkValues["MCP_FD_Sw_On_R"] = data.mcpFdSwitchOnRight;
+            pmdg777SdkValues["MCP_ATArm_Sw_On_L"] = data.mcpAtArmSwitchOnLeft;
+            pmdg777SdkValues["MCP_ATArm_Sw_On_R"] = data.mcpAtArmSwitchOnRight;
+            pmdg777SdkValues["MCP_annunAP_L"] = data.mcpAnnunApLeft;
+            pmdg777SdkValues["MCP_annunAP_R"] = data.mcpAnnunApRight;
+            pmdg777SdkValues["MCP_annunAT"] = data.mcpAnnunAt;
+            pmdg777SdkValues["MCP_annunLNAV"] = data.mcpAnnunLnav;
+            pmdg777SdkValues["MCP_annunVNAV"] = data.mcpAnnunVnav;
+            pmdg777SdkValues["MCP_annunFLCH"] = data.mcpAnnunFlch;
+            pmdg777SdkValues["MCP_annunHDG_HOLD"] = data.mcpAnnunHdgHold;
+            pmdg777SdkValues["MCP_annunVS_FPA"] = data.mcpAnnunVsFpa;
+            pmdg777SdkValues["MCP_annunALT_HOLD"] = data.mcpAnnunAltHold;
+            pmdg777SdkValues["MCP_annunLOC"] = data.mcpAnnunLoc;
+            pmdg777SdkValues["MCP_annunAPP"] = data.mcpAnnunApp;
+        }
+
         private string BuildStatusJson(bool connectedToSimulator, string lastError)
         {
             var sb = new StringBuilder(2048);
@@ -1586,16 +1912,24 @@ namespace SimpleSimConnector
             sb.Append("\"headingTrueDegrees\":null,");
             sb.Append("\"headingMagneticDegrees\":null,");
             sb.Append("\"gForce\":null,");
+            sb.Append("\"altitudeFeet\":null,");
             sb.Append("\"altitudeMeters\":null,");
             sb.Append("\"pitchDegrees\":null,");
             sb.Append("\"bankDegrees\":null,");
+            sb.Append("\"groundElevationFeet\":null,");
             sb.Append("\"groundElevationMeters\":null,");
+            sb.Append("\"landingRateFeetPerMinute\":null,");
             sb.Append("\"landingRateMetersPerSecond\":null,");
             sb.Append("\"onGround\":null,");
+            sb.Append("\"indicatedAirspeedKnots\":null,");
             sb.Append("\"indicatedAirspeedMetersPerSecond\":null,");
+            sb.Append("\"trueAirspeedKnots\":null,");
             sb.Append("\"trueAirspeedMetersPerSecond\":null,");
+            sb.Append("\"barberPoleAirspeedKnots\":null,");
             sb.Append("\"barberPoleAirspeedMetersPerSecond\":null,");
+            sb.Append("\"groundSpeedKnots\":null,");
             sb.Append("\"groundSpeedMetersPerSecond\":null,");
+            sb.Append("\"verticalSpeedFeetPerMinute\":null,");
             sb.Append("\"verticalSpeedMetersPerSecond\":null,");
             sb.Append("\"parkingBrake\":null,");
             sb.Append("\"numFlapPositions\":null,");
@@ -1624,15 +1958,16 @@ namespace SimpleSimConnector
             sb.Append("],");
             sb.Append("\"outsideAirTemperatureCelsius\":null,");
             sb.Append("\"visibilityKm\":null,");
+            sb.Append("\"windSpeedKnots\":null,");
             sb.Append("\"windSpeedMetersPerSecond\":null,");
             sb.Append("\"windDirectionDegrees\":null,");
             sb.Append("\"ambientPressurePascal\":null,");
             sb.Append("\"seaLevelPressurePascal\":null,");
             sb.Append("\"barometerSettingPascal\":null,");
             sb.Append("\"apu\":{\"status\":null,\"source\":null},");
-            sb.Append("\"pressurization\":{\"cabinAltitudeMeters\":null},");
+            sb.Append("\"pressurization\":{\"cabinAltitudeFeet\":null,\"cabinAltitudeMeters\":null},");
             sb.Append("\"flightControls\":{\"yawDamperEnabled\":[null]},");
-            sb.Append("\"autopilot\":{\"source\":null,\"flightDirectorEnabled\":null,\"flightDirector1Enabled\":null,\"flightDirector2Enabled\":null,\"modes\":[],\"airspeedHoldMetersPerSecond\":null,\"machHoldMach\":null,\"altitudeHoldMeters\":null,\"altitudeArmMeters\":null,\"headingLockDegrees\":null,\"pitchHoldDegrees\":null,\"verticalSpeedHoldMetersPerSecond\":null,\"ap1Engaged\":null,\"ap2Engaged\":null,\"autoThrottleArmed\":null,\"autoThrottleActive\":null,\"selectedSpeedMetersPerSecond\":null,\"selectedMach\":null,\"selectedHeadingDegrees\":null,\"selectedAltitudeMeters\":null,\"selectedVerticalSpeedMetersPerSecond\":null,\"lateralMode\":null,\"verticalMode\":null,\"managedSpeed\":null,\"managedLateral\":null,\"managedVertical\":null},");
+            sb.Append("\"autopilot\":{\"source\":null,\"flightDirectorEnabled\":null,\"flightDirector1Enabled\":null,\"flightDirector2Enabled\":null,\"modes\":[],\"airspeedHoldKnots\":null,\"airspeedHoldMetersPerSecond\":null,\"machHoldMach\":null,\"altitudeHoldFeet\":null,\"altitudeHoldMeters\":null,\"altitudeArmFeet\":null,\"altitudeArmMeters\":null,\"headingLockDegrees\":null,\"pitchHoldDegrees\":null,\"verticalSpeedHoldFeetPerMinute\":null,\"verticalSpeedHoldMetersPerSecond\":null,\"ap1Engaged\":null,\"ap2Engaged\":null,\"autoThrottleArmed\":null,\"autoThrottleActive\":null,\"selectedSpeedKnots\":null,\"selectedSpeedMetersPerSecond\":null,\"selectedMach\":null,\"selectedHeadingDegrees\":null,\"selectedAltitudeFeet\":null,\"selectedAltitudeMeters\":null,\"selectedVerticalSpeedFeetPerMinute\":null,\"selectedVerticalSpeedMetersPerSecond\":null,\"lateralMode\":null,\"verticalMode\":null,\"managedSpeed\":null,\"managedLateral\":null,\"managedVertical\":null},");
             sb.Append("\"aircraftInformation\":{\"simulatorPath\":\"\",\"packagePath\":\"\",\"version\":\"1.1.0\"},");
             sb.Append("\"diagnostics\":{\"rejected\":[],\"warnings\":[],\"aircraftAdapter\":\"GenericAircraftAdapter\",\"fenixDetected\":false,\"fenixLvarSource\":\"unavailable\",\"fenixVariablesDiscovered\":0,\"fenixVariablesReadable\":0,\"identity\":{\"title\":null,\"atcModel\":null,\"atcType\":null,\"simObjectTitle\":null,\"packagePath\":null,\"detectedFamily\":\"Generic\",\"detectedVariant\":\"UNKNOWN\"},\"systems\":{\"apu\":{\"genericValue\":null,\"fenixRaw\":{},\"selected\":null,\"reason\":null},\"flightDirector\":{\"genericValue\":null,\"fenixRaw\":{\"fd1\":null,\"fd2\":null},\"selected\":null,\"reason\":null},\"autopilot\":{\"genericModes\":[],\"fenixRaw\":{},\"selectedSource\":null}}}");
             sb.Append("}");
@@ -1661,13 +1996,27 @@ namespace SimpleSimConnector
             double? latitude = TelemetryMath.ValidateNumeric("latitude", core.latitude, core.latitude, rejected);
             double? longitude = TelemetryMath.ValidateNumeric("longitude", core.longitude, core.longitude, rejected);
             double? altitudeMeters = TelemetryMath.ValidateNumeric("altitudeMeters", core.altitudeMeters, core.altitudeMeters, rejected);
+            double? altitudeFeet = altitudeMeters.HasValue ? TelemetryMath.MetersToFeet(altitudeMeters.Value) : (double?)null;
+            double? groundSpeedKnots = TelemetryMath.ValidateNumeric("groundSpeedKnots", core.groundSpeedKnots, ZeroNoise(core.groundSpeedKnots, 0.01), rejected);
             double? groundspeed = TelemetryMath.ValidateNumeric("groundSpeedMetersPerSecond", core.groundSpeedKnots, ZeroNoise(TelemetryMath.KnotsToMetersPerSecond(core.groundSpeedKnots), 0.01), rejected);
             double? heading = TelemetryMath.ValidateNumeric("headingTrueDegrees", core.headingTrueDegrees, NormalizeHeading(core.headingTrueDegrees), rejected);
             double? headingMagnetic = TelemetryMath.ValidateNumeric("headingMagneticDegrees", core.headingMagneticDegrees, NormalizeHeading(core.headingMagneticDegrees), rejected);
             double? verticalSpeed = TelemetryMath.ValidateNumeric("verticalSpeedMetersPerSecond", core.verticalSpeedFeetPerSecond, ZeroNoise(TelemetryMath.FeetPerSecondToMetersPerSecond(core.verticalSpeedFeetPerSecond), 0.001), rejected);
+            double? verticalSpeedFeetPerMinute = TelemetryMath.IsFinite(core.verticalSpeedFeetPerSecond)
+                ? ZeroNoise(TelemetryMath.FeetPerSecondToFeetPerMinute(core.verticalSpeedFeetPerSecond), 0.1)
+                : (double?)null;
             double? indicatedAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("indicatedAirspeedMetersPerSecond", core.indicatedAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.indicatedAirspeedKnots), rejected);
+            double? indicatedAirspeedKnots = TelemetryMath.ValidateNumeric("indicatedAirspeedKnots", core.indicatedAirspeedKnots, core.indicatedAirspeedKnots, rejected);
             double? trueAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("trueAirspeedMetersPerSecond", core.trueAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.trueAirspeedKnots), rejected);
+            double? trueAirspeedKnots = TelemetryMath.ValidateNumeric("trueAirspeedKnots", core.trueAirspeedKnots, core.trueAirspeedKnots, rejected);
             double? barberPoleAirspeedMetersPerSecond = TelemetryMath.ValidateNumeric("barberPoleAirspeedMetersPerSecond", core.barberPoleAirspeedKnots, TelemetryMath.KnotsToMetersPerSecond(core.barberPoleAirspeedKnots), rejected);
+            double? barberPoleAirspeedKnots = TelemetryMath.ValidateNumeric("barberPoleAirspeedKnots", core.barberPoleAirspeedKnots, core.barberPoleAirspeedKnots, rejected);
+            double? groundElevationFeet = TelemetryMath.IsFinite(core.groundElevationMeters)
+                ? TelemetryMath.MetersToFeet(core.groundElevationMeters)
+                : (double?)null;
+            double? landingRateFeetPerMinute = TelemetryMath.IsFinite(core.landingRateMetersPerSecond)
+                ? TelemetryMath.MetersPerSecondToFeetPerMinute(core.landingRateMetersPerSecond)
+                : (double?)null;
 
             double? outsideAirTemperatureCelsius = TelemetryMath.ValidateNumeric("outsideAirTemperatureCelsius", weather.outsideAirTemperatureCelsius, weather.outsideAirTemperatureCelsius, rejected);
             double? ambientPressurePascal = TelemetryMath.ValidateNumeric("ambientPressurePascal", weather.ambientPressureInchesHg, TelemetryMath.InchesHgToPascals(weather.ambientPressureInchesHg), rejected);
@@ -1675,6 +2024,7 @@ namespace SimpleSimConnector
             double? barometerSettingPascal = TelemetryMath.ValidateNumeric("barometerSettingPascal", autopilot.barometerSettingMillibars, TelemetryMath.MillibarsToPascals(autopilot.barometerSettingMillibars), rejected);
             double? visibilityKm = TelemetryMath.ValidateNumeric("visibilityKm", weather.visibilityMeters, TelemetryMath.MetersToKilometers(weather.visibilityMeters), rejected);
             double? windSpeedMetersPerSecond = TelemetryMath.ValidateNumeric("windSpeedMetersPerSecond", weather.windSpeedKnots, TelemetryMath.KnotsToMetersPerSecond(weather.windSpeedKnots), rejected);
+            double? windSpeedKnots = TelemetryMath.ValidateNumeric("windSpeedKnots", weather.windSpeedKnots, weather.windSpeedKnots, rejected);
             double? windDirectionDegrees = TelemetryMath.ValidateNumeric("windDirectionDegrees", weather.windDirectionDegrees, NormalizeHeading(weather.windDirectionDegrees), rejected);
 
             if (!outsideAirTemperatureCelsius.HasValue && TelemetryMath.IsFinite(weather.outsideAirTemperatureCelsius))
@@ -1779,15 +2129,30 @@ namespace SimpleSimConnector
                 VerticalSpeedHoldMetersPerSecond = genericAutopilotVerticalSpeedHoldMetersPerSecond
             };
 
+            IReadOnlyDictionary<string, double?> customValues = fenixLvarValues;
+            ISet<string> discoveredVariables = fenixDiscoveredVarSet;
+            int discoveredVariableCount = fenixDiscoveredVars.Count;
+            int readableVariableCount = fenixReadableVarNames.Count;
+            string customVariableSource = fenixReadableVarNames.Count > 0 ? "direct-simconnect" : "unavailable";
+
+            if (activeAircraftAdapter is Pmdg777Adapter)
+            {
+                customValues = pmdg777SdkValues;
+                discoveredVariables = new HashSet<string>(pmdg777SdkValues.Keys, StringComparer.OrdinalIgnoreCase);
+                discoveredVariableCount = 24;
+                readableVariableCount = pmdg777ClientDataAvailable ? pmdg777SdkValues.Count : 0;
+                customVariableSource = pmdg777ClientDataAvailable ? "pmdg-777-sdk" : "pmdg-777-sdk-unavailable";
+            }
+
             var adapterContext = new AircraftAdapterContext
             {
                 Identity = identity,
                 Generic = genericSystems,
-                CustomVariableValues = fenixLvarValues,
-                DiscoveredVariables = fenixDiscoveredVarSet,
-                DiscoveredVariableCount = fenixDiscoveredVars.Count,
-                ReadableVariableCount = fenixReadableVarNames.Count,
-                CustomVariableSource = fenixReadableVarNames.Count > 0 ? "direct-simconnect" : "unavailable"
+                CustomVariableValues = customValues,
+                DiscoveredVariables = discoveredVariables,
+                DiscoveredVariableCount = discoveredVariableCount,
+                ReadableVariableCount = readableVariableCount,
+                CustomVariableSource = customVariableSource
             };
 
             AircraftAdapterResult adapterResult = activeAircraftAdapter.Evaluate(adapterContext);
@@ -1797,24 +2162,46 @@ namespace SimpleSimConnector
             bool? flightDirector1Enabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirector1Enabled : null;
             bool? flightDirector2Enabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirector2Enabled : null;
             IList<string> autopilotModes = adapterResult.Autopilot != null ? adapterResult.Autopilot.Modes : genericAutopilotModes;
-            double? autopilotAirspeedHoldMetersPerSecond = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            bool useCustomAutopilotTelemetry = ShouldUseCustomAutopilotTelemetry(adapterResult);
+            double? autopilotAirspeedHoldMetersPerSecond = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedSpeedMetersPerSecond
                 : genericAutopilotAirspeedHoldMetersPerSecond;
-            double? autopilotMachHoldMach = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            double? autopilotMachHoldMach = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedMach
                 : genericAutopilotMachHoldMach;
-            double? autopilotAltitudeHoldMeters = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            double? autopilotAltitudeHoldMeters = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedAltitudeMeters
                 : genericAutopilotAltitudeHoldMeters;
-            double? autopilotHeadingLockDegrees = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            double? autopilotHeadingLockDegrees = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedHeadingDegrees
                 : genericAutopilotHeadingLockDegrees;
-            double? autopilotPitchHoldDegrees = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            double? autopilotPitchHoldDegrees = useCustomAutopilotTelemetry
                 ? null
                 : genericAutopilotPitchHoldDegrees;
-            double? autopilotVerticalSpeedHoldMetersPerSecond = adapterResult.Autopilot != null && adapterResult.Autopilot.Source == "fenix-lvar"
+            double? autopilotVerticalSpeedHoldMetersPerSecond = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond
                 : genericAutopilotVerticalSpeedHoldMetersPerSecond;
+            double? cabinAltitudeFeet = TelemetryMath.IsFinite(core.cabinAltitudeMeters)
+                ? TelemetryMath.MetersToFeet(core.cabinAltitudeMeters)
+                : (double?)null;
+            double? autopilotAirspeedHoldKnots = autopilotAirspeedHoldMetersPerSecond.HasValue
+                ? TelemetryMath.MetersPerSecondToKnots(autopilotAirspeedHoldMetersPerSecond.Value)
+                : (double?)null;
+            double? autopilotAltitudeHoldFeet = autopilotAltitudeHoldMeters.HasValue
+                ? TelemetryMath.MetersToFeet(autopilotAltitudeHoldMeters.Value)
+                : (double?)null;
+            double? autopilotVerticalSpeedHoldFeetPerMinute = autopilotVerticalSpeedHoldMetersPerSecond.HasValue
+                ? TelemetryMath.MetersPerSecondToFeetPerMinute(autopilotVerticalSpeedHoldMetersPerSecond.Value)
+                : (double?)null;
+            double? selectedSpeedKnots = adapterResult.Autopilot != null && adapterResult.Autopilot.SelectedSpeedMetersPerSecond.HasValue
+                ? TelemetryMath.MetersPerSecondToKnots(adapterResult.Autopilot.SelectedSpeedMetersPerSecond.Value)
+                : (double?)null;
+            double? selectedAltitudeFeet = adapterResult.Autopilot != null && adapterResult.Autopilot.SelectedAltitudeMeters.HasValue
+                ? TelemetryMath.MetersToFeet(adapterResult.Autopilot.SelectedAltitudeMeters.Value)
+                : (double?)null;
+            double? selectedVerticalSpeedFeetPerMinute = adapterResult.Autopilot != null && adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond.HasValue
+                ? TelemetryMath.MetersPerSecondToFeetPerMinute(adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond.Value)
+                : (double?)null;
 
             var sb = new StringBuilder(4096);
             sb.Append("{");
@@ -1822,8 +2209,8 @@ namespace SimpleSimConnector
             sb.Append("\"connected\":").Append(Bool(connected)).Append(",");
             sb.Append("\"latitude\":").Append(Num(latitude)).Append(",");
             sb.Append("\"longitude\":").Append(Num(longitude)).Append(",");
-            sb.Append("\"altitude\":").Append(Num(altitudeMeters)).Append(",");
-            sb.Append("\"groundspeed\":").Append(Num(groundspeed)).Append(",");
+            sb.Append("\"altitude\":").Append(Num(altitudeFeet)).Append(",");
+            sb.Append("\"groundspeed\":").Append(Num(groundSpeedKnots)).Append(",");
             sb.Append("\"heading\":").Append(Num(heading)).Append(",");
             sb.Append("\"callsign\":\"").Append(Escape(callsign)).Append("\",");
             sb.Append("\"flight_plan\":{");
@@ -1848,16 +2235,24 @@ namespace SimpleSimConnector
             sb.Append("\"headingTrueDegrees\":").Append(Num(heading)).Append(",");
             sb.Append("\"headingMagneticDegrees\":").Append(Num(headingMagnetic)).Append(",");
             sb.Append("\"gForce\":").Append(Num(core.gForce)).Append(",");
+            sb.Append("\"altitudeFeet\":").Append(Num(altitudeFeet)).Append(",");
             sb.Append("\"altitudeMeters\":").Append(Num(altitudeMeters)).Append(",");
             sb.Append("\"pitchDegrees\":").Append(Num(core.pitchDegrees)).Append(",");
             sb.Append("\"bankDegrees\":").Append(Num(core.bankDegrees)).Append(",");
+            sb.Append("\"groundElevationFeet\":").Append(Num(groundElevationFeet)).Append(",");
             sb.Append("\"groundElevationMeters\":").Append(Num(core.groundElevationMeters)).Append(",");
+            sb.Append("\"landingRateFeetPerMinute\":").Append(Num(landingRateFeetPerMinute)).Append(",");
             sb.Append("\"landingRateMetersPerSecond\":").Append(Num(core.landingRateMetersPerSecond)).Append(",");
             sb.Append("\"onGround\":").Append(JsonBoolOrNull(core.onGround)).Append(",");
+            sb.Append("\"indicatedAirspeedKnots\":").Append(Num(indicatedAirspeedKnots)).Append(",");
             sb.Append("\"indicatedAirspeedMetersPerSecond\":").Append(Num(indicatedAirspeedMetersPerSecond)).Append(",");
+            sb.Append("\"trueAirspeedKnots\":").Append(Num(trueAirspeedKnots)).Append(",");
             sb.Append("\"trueAirspeedMetersPerSecond\":").Append(Num(trueAirspeedMetersPerSecond)).Append(",");
+            sb.Append("\"barberPoleAirspeedKnots\":").Append(Num(barberPoleAirspeedKnots)).Append(",");
             sb.Append("\"barberPoleAirspeedMetersPerSecond\":").Append(Num(barberPoleAirspeedMetersPerSecond)).Append(",");
+            sb.Append("\"groundSpeedKnots\":").Append(Num(groundSpeedKnots)).Append(",");
             sb.Append("\"groundSpeedMetersPerSecond\":").Append(Num(groundspeed)).Append(",");
+            sb.Append("\"verticalSpeedFeetPerMinute\":").Append(Num(verticalSpeedFeetPerMinute)).Append(",");
             sb.Append("\"verticalSpeedMetersPerSecond\":").Append(Num(verticalSpeed)).Append(",");
             sb.Append("\"parkingBrake\":").Append(JsonBoolOrNull(core.parkingBrake)).Append(",");
             sb.Append("\"numFlapPositions\":").Append(Num(core.numFlapPositions)).Append(",");
@@ -1896,13 +2291,14 @@ namespace SimpleSimConnector
             sb.Append("],");
             sb.Append("\"outsideAirTemperatureCelsius\":").Append(Num(outsideAirTemperatureCelsius)).Append(",");
             sb.Append("\"visibilityKm\":").Append(Num(visibilityKm)).Append(",");
+            sb.Append("\"windSpeedKnots\":").Append(Num(windSpeedKnots)).Append(",");
             sb.Append("\"windSpeedMetersPerSecond\":").Append(Num(windSpeedMetersPerSecond)).Append(",");
             sb.Append("\"windDirectionDegrees\":").Append(Num(windDirectionDegrees)).Append(",");
             sb.Append("\"ambientPressurePascal\":").Append(Num(ambientPressurePascal)).Append(",");
             sb.Append("\"seaLevelPressurePascal\":").Append(Num(seaLevelPressurePascal)).Append(",");
             sb.Append("\"barometerSettingPascal\":").Append(Num(barometerSettingPascal)).Append(",");
             sb.Append("\"apu\":{\"status\":").Append(JsonStringOrNull(apuStatus)).Append(",\"source\":").Append(JsonStringOrNull(adapterResult.Apu != null ? adapterResult.Apu.Source : "generic-simvar")).Append("},");
-            sb.Append("\"pressurization\":{\"cabinAltitudeMeters\":").Append(Num(core.cabinAltitudeMeters)).Append("},");
+            sb.Append("\"pressurization\":{\"cabinAltitudeFeet\":").Append(Num(cabinAltitudeFeet)).Append(",\"cabinAltitudeMeters\":").Append(Num(core.cabinAltitudeMeters)).Append("},");
             sb.Append("\"flightControls\":{\"yawDamperEnabled\":[").Append(JsonBoolOrNull(yawDamperEnabled)).Append("]},");
             sb.Append("\"autopilot\":{");
             sb.Append("\"source\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Source : "generic-simvar")).Append(",");
@@ -1910,21 +2306,28 @@ namespace SimpleSimConnector
             sb.Append("\"flightDirector1Enabled\":").Append(JsonBoolOrNull(flightDirector1Enabled)).Append(",");
             sb.Append("\"flightDirector2Enabled\":").Append(JsonBoolOrNull(flightDirector2Enabled)).Append(",");
             sb.Append("\"modes\":").Append(JsonStringArray(autopilotModes != null ? new List<string>(autopilotModes) : new List<string>())).Append(",");
+            sb.Append("\"airspeedHoldKnots\":").Append(Num(autopilotAirspeedHoldKnots)).Append(",");
             sb.Append("\"airspeedHoldMetersPerSecond\":").Append(Num(autopilotAirspeedHoldMetersPerSecond)).Append(",");
             sb.Append("\"machHoldMach\":").Append(Num(autopilotMachHoldMach)).Append(",");
+            sb.Append("\"altitudeHoldFeet\":").Append(Num(autopilotAltitudeHoldFeet)).Append(",");
             sb.Append("\"altitudeHoldMeters\":").Append(Num(autopilotAltitudeHoldMeters)).Append(",");
+            sb.Append("\"altitudeArmFeet\":").Append(Num(autopilotAltitudeHoldFeet)).Append(",");
             sb.Append("\"altitudeArmMeters\":").Append(Num(autopilotAltitudeHoldMeters)).Append(",");
             sb.Append("\"headingLockDegrees\":").Append(Num(autopilotHeadingLockDegrees)).Append(",");
             sb.Append("\"pitchHoldDegrees\":").Append(Num(autopilotPitchHoldDegrees)).Append(",");
+            sb.Append("\"verticalSpeedHoldFeetPerMinute\":").Append(Num(autopilotVerticalSpeedHoldFeetPerMinute)).Append(",");
             sb.Append("\"verticalSpeedHoldMetersPerSecond\":").Append(Num(autopilotVerticalSpeedHoldMetersPerSecond)).Append(",");
             sb.Append("\"ap1Engaged\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Ap1Engaged : null)).Append(",");
             sb.Append("\"ap2Engaged\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Ap2Engaged : null)).Append(",");
             sb.Append("\"autoThrottleArmed\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.AutoThrottleArmed : null)).Append(",");
             sb.Append("\"autoThrottleActive\":").Append(JsonBoolOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.AutoThrottleActive : null)).Append(",");
+            sb.Append("\"selectedSpeedKnots\":").Append(Num(selectedSpeedKnots)).Append(",");
             sb.Append("\"selectedSpeedMetersPerSecond\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedSpeedMetersPerSecond : null)).Append(",");
             sb.Append("\"selectedMach\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedMach : null)).Append(",");
             sb.Append("\"selectedHeadingDegrees\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedHeadingDegrees : null)).Append(",");
+            sb.Append("\"selectedAltitudeFeet\":").Append(Num(selectedAltitudeFeet)).Append(",");
             sb.Append("\"selectedAltitudeMeters\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedAltitudeMeters : null)).Append(",");
+            sb.Append("\"selectedVerticalSpeedFeetPerMinute\":").Append(Num(selectedVerticalSpeedFeetPerMinute)).Append(",");
             sb.Append("\"selectedVerticalSpeedMetersPerSecond\":").Append(Num(adapterResult.Autopilot != null ? adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond : null)).Append(",");
             sb.Append("\"lateralMode\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.LateralMode : null)).Append(",");
             sb.Append("\"verticalMode\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.VerticalMode : null)).Append(",");
@@ -1942,6 +2345,32 @@ namespace SimpleSimConnector
             LogRejectedTelemetry(rejected);
             LogDiagnosticWarnings(warnings);
             return sb.ToString();
+        }
+
+        private static bool ShouldUseCustomAutopilotTelemetry(AircraftAdapterResult adapterResult)
+        {
+            if (adapterResult == null || adapterResult.Autopilot == null)
+            {
+                return false;
+            }
+
+            string source = adapterResult.Autopilot.Source ?? "";
+            if (source.Length == 0)
+            {
+                return false;
+            }
+
+            if (string.Equals(source, "generic-simvar", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (source.EndsWith("-unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private string BuildCallsign()

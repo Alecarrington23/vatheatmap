@@ -27,3 +27,5 @@ backend/simconnect-state.json"/backend/simconnect-state.json"
 /Virtual Airline data/
 
 src/SimpleSimConnector-source.Tests/
+
+frontend/asobo-airport-lpma-madeira/

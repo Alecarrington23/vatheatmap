@@ -2144,7 +2144,7 @@ namespace SimpleSimConnector
                 customVariableSource = pmdg777ClientDataAvailable ? "pmdg-777-sdk" : "pmdg-777-sdk-unavailable";
             }
 
-            var adapterContext = new AircraftAdapterContext
+            var providerContext = new AircraftProviderContext
             {
                 Identity = identity,
                 Generic = genericSystems,
@@ -2155,7 +2155,9 @@ namespace SimpleSimConnector
                 CustomVariableSource = customVariableSource
             };
 
-            AircraftAdapterResult adapterResult = activeAircraftAdapter.Evaluate(adapterContext);
+            AircraftProviderEvaluation providerEvaluation = ProviderRegistry.Evaluate(providerContext);
+            AircraftAdapterResult adapterResult = providerEvaluation.AdapterResult;
+            AircraftStateFrame stateFrame = providerEvaluation.Frame;
             string apuStatus = adapterResult.Apu != null ? adapterResult.Apu.Status : genericApuStatus;
             bool? yawDamperEnabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.YawDamperEnabled : genericSystems.YawDamperEnabled;
             bool? flightDirectorEnabled = adapterResult.Autopilot != null ? adapterResult.Autopilot.FlightDirectorEnabled : genericFlightDirectorEnabled;
@@ -2340,7 +2342,7 @@ namespace SimpleSimConnector
             sb.Append("\"packagePath\":").Append(JsonStringOrNull(identity.PackagePath)).Append(",");
             sb.Append("\"version\":\"1.1.0\"");
             sb.Append("},");
-            sb.Append("\"diagnostics\":").Append(BuildDiagnosticsJson(rejected, warnings, identity, genericSystems, adapterResult));
+            sb.Append("\"diagnostics\":").Append(BuildDiagnosticsJson(rejected, warnings, identity, providerEvaluation, stateFrame));
             sb.Append("}");
             LogRejectedTelemetry(rejected);
             LogDiagnosticWarnings(warnings);
@@ -2642,9 +2644,11 @@ namespace SimpleSimConnector
             IList<TelemetryRejectedValue> rejected,
             IList<TelemetryDiagnosticWarning> warnings,
             AircraftIdentityInfo identity,
-            GenericSystemsData genericSystems,
-            AircraftAdapterResult adapterResult)
+            AircraftProviderEvaluation providerEvaluation,
+            AircraftStateFrame stateFrame)
         {
+            GenericSystemsData genericSystems = providerEvaluation != null ? providerEvaluation.GenericBaseline : null;
+            AircraftAdapterResult adapterResult = providerEvaluation != null ? providerEvaluation.AdapterResult : null;
             var sb = new StringBuilder();
             sb.Append("{\"rejected\":[");
 
@@ -2720,7 +2724,27 @@ namespace SimpleSimConnector
             sb.Append("\"fenixRaw\":").Append(JsonNullableDoubleMap(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.RawValues : null)).Append(",");
             sb.Append("\"selectedSource\":").Append(JsonStringOrNull(adapterResult != null && adapterResult.Autopilot != null ? adapterResult.Autopilot.Source : null));
             sb.Append("}");
-            sb.Append("}}");
+            sb.Append("},");
+            sb.Append("\"providerState\":").Append(BuildProviderStateJson(providerEvaluation, stateFrame));
+            sb.Append("}");
+            return sb.ToString();
+        }
+
+        private string BuildProviderStateJson(AircraftProviderEvaluation providerEvaluation, AircraftStateFrame stateFrame)
+        {
+            var sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append("\"providerId\":").Append(JsonStringOrNull(stateFrame != null ? stateFrame.ProviderId : null)).Append(",");
+            sb.Append("\"providerName\":").Append(JsonStringOrNull(stateFrame != null ? stateFrame.ProviderName : null)).Append(",");
+            sb.Append("\"sourceKind\":").Append(JsonStringOrNull(stateFrame != null ? stateFrame.SourceKind.ToString() : null)).Append(",");
+            sb.Append("\"profileName\":").Append(JsonStringOrNull(providerEvaluation != null && providerEvaluation.Profile != null ? providerEvaluation.Profile.DisplayName : null)).Append(",");
+            sb.Append("\"capabilities\":{");
+            sb.Append("\"available\":").Append(JsonStringArray(stateFrame != null && stateFrame.Capabilities != null && stateFrame.Capabilities.Available != null ? new List<string>(stateFrame.Capabilities.Available) : new List<string>())).Append(",");
+            sb.Append("\"unavailable\":").Append(JsonStringArray(stateFrame != null && stateFrame.Capabilities != null && stateFrame.Capabilities.Unavailable != null ? new List<string>(stateFrame.Capabilities.Unavailable) : new List<string>())).Append(",");
+            sb.Append("\"unsupported\":").Append(JsonStringArray(stateFrame != null && stateFrame.Capabilities != null && stateFrame.Capabilities.Unsupported != null ? new List<string>(stateFrame.Capabilities.Unsupported) : new List<string>()));
+            sb.Append("},");
+            sb.Append("\"fields\":").Append(JsonFieldSourceMap(stateFrame != null ? stateFrame.FieldSources : null));
+            sb.Append("}");
             return sb.ToString();
         }
 
@@ -2741,6 +2765,36 @@ namespace SimpleSimConnector
             }
 
             return null;
+        }
+
+        private static string JsonFieldSourceMap(IDictionary<string, AircraftStateValueMetadata> values)
+        {
+            if (values == null || values.Count == 0)
+            {
+                return "{}";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append("{");
+            bool first = true;
+            foreach (KeyValuePair<string, AircraftStateValueMetadata> pair in values)
+            {
+                if (!first)
+                {
+                    sb.Append(",");
+                }
+
+                first = false;
+                sb.Append("\"").Append(Escape(pair.Key)).Append("\":{");
+                sb.Append("\"provider\":").Append(JsonStringOrNull(pair.Value != null ? pair.Value.ProviderName : null)).Append(",");
+                sb.Append("\"sourceKind\":").Append(JsonStringOrNull(pair.Value != null ? pair.Value.SourceKind.ToString() : null)).Append(",");
+                sb.Append("\"availability\":").Append(JsonStringOrNull(pair.Value != null ? pair.Value.Availability.ToString() : null)).Append(",");
+                sb.Append("\"reason\":").Append(JsonStringOrNull(pair.Value != null ? pair.Value.Reason : null));
+                sb.Append("}");
+            }
+
+            sb.Append("}");
+            return sb.ToString();
         }
 
         private static string JsonNullableDoubleMap(IDictionary<string, double?> values)

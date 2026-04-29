@@ -65,6 +65,7 @@
 
   <ItemGroup>
     <Compile Include="AircraftAdapters.cs" />
+    <Compile Include="AircraftStateProviders.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="TelemetryBridgeSupport.cs" />
   </ItemGroup>

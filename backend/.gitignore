@@ -1,0 +1,7 @@
+# SQLite / local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Local backend DB backups
+backend/*.db

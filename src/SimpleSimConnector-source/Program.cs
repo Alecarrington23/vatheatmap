@@ -1481,7 +1481,26 @@ namespace SimpleSimConnector
                 "Packages",
                 "Community");
 
-            if (string.Equals(baseIdentity.DetectedFamily, "IniBuilds A350", StringComparison.OrdinalIgnoreCase))
+            bool likelyIniBuildsA350 =
+                string.Equals(baseIdentity.DetectedFamily, "IniBuilds A350", StringComparison.OrdinalIgnoreCase) ||
+                LooksLikeInstalledIniBuildsA350(identityData);
+
+            bool likelyFlyByWireA380 =
+                string.Equals(baseIdentity.DetectedFamily, "FlyByWire A380X", StringComparison.OrdinalIgnoreCase) ||
+                LooksLikeInstalledFlyByWireA380(identityData);
+
+            if (likelyFlyByWireA380)
+            {
+                string a380Package = Path.Combine(appDataPackagesRoot, "flybywire-aircraft-a380-842");
+                if (Directory.Exists(a380Package))
+                {
+                    return a380Package;
+                }
+
+                return "";
+            }
+
+            if (likelyIniBuildsA350)
             {
                 string a350Package = Path.Combine(appDataPackagesRoot, "inibuilds-aircraft-a350");
                 if (Directory.Exists(a350Package))
@@ -1545,6 +1564,48 @@ namespace SimpleSimConnector
             return "";
         }
 
+        private static bool LooksLikeInstalledIniBuildsA350(IdentityData identityData)
+        {
+            string title = Clean(identityData.title).ToUpperInvariant();
+            string atcModel = Clean(identityData.atcModel).ToUpperInvariant();
+            string atcType = Clean(identityData.atcType).ToUpperInvariant();
+
+            bool mentionsA350Family =
+                title.Contains("A350") ||
+                atcModel.Contains("A350") ||
+                atcType.Contains("A359") ||
+                atcType.Contains("A35K");
+
+            if (!mentionsA350Family)
+            {
+                return false;
+            }
+
+            return title.Contains("DEFAULT CABIN") ||
+                   title.Contains("A350-900") ||
+                   title.Contains("A350-1000") ||
+                   atcModel.Contains("A350-900") ||
+                   atcModel.Contains("A350-1000") ||
+                   atcType.Contains("A359") ||
+                   atcType.Contains("A35K");
+        }
+
+        private static bool LooksLikeInstalledFlyByWireA380(IdentityData identityData)
+        {
+            string title = Clean(identityData.title).ToUpperInvariant();
+            string atcModel = Clean(identityData.atcModel).ToUpperInvariant();
+            bool mentionsFamily =
+                title.Contains("FLYBYWIRE") &&
+                (title.Contains("A380") || title.Contains("A380X") || atcModel.Contains("A380"));
+
+            if (!mentionsFamily)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         private void EnsureCustomLvarRequests()
         {
             if (simconnect == null)
@@ -1594,6 +1655,15 @@ namespace SimpleSimConnector
                     IniBuildsA340Adapter.GetDiscoveryKeywords());
                 requestedVariables = IniBuildsA340Adapter.GetRequestedVariables(discovery.CandidateVariableSet);
                 discoveryLabel = "IniBuilds A340";
+            }
+            else if (activeAircraftAdapter is FlyByWireA380XAdapter)
+            {
+                fenixCockpitBehaviorPath = FindFlyByWireA380ModelPath(latestAircraftIdentity);
+                discovery = IniBuildsVariableDiscovery.DiscoverLvarsFromDirectory(
+                    fenixCockpitBehaviorPath,
+                    FlyByWireA380XAdapter.GetDiscoveryKeywords());
+                requestedVariables = FlyByWireA380XAdapter.GetRequestedVariables(discovery.CandidateVariableSet);
+                discoveryLabel = "FlyByWire A380X";
             }
             else
             {
@@ -1830,6 +1900,45 @@ namespace SimpleSimConnector
             return "";
         }
 
+        private string FindFlyByWireA380ModelPath(AircraftIdentityInfo identity)
+        {
+            var candidates = new List<string>();
+
+            if (identity != null && !string.IsNullOrWhiteSpace(identity.PackagePath))
+            {
+                candidates.Add(Path.Combine(
+                    identity.PackagePath,
+                    "SimObjects",
+                    "AirPlanes",
+                    "FlyByWire_A380_842",
+                    "model"));
+            }
+
+            string appDataPackagesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Microsoft Flight Simulator 2024",
+                "Packages",
+                "Community");
+
+            candidates.Add(Path.Combine(
+                appDataPackagesRoot,
+                "flybywire-aircraft-a380-842",
+                "SimObjects",
+                "AirPlanes",
+                "FlyByWire_A380_842",
+                "model"));
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (Directory.Exists(candidates[i]))
+                {
+                    return candidates[i];
+                }
+            }
+
+            return "";
+        }
+
         private void RegisterFenixLvarDefinition(string varName, int index)
         {
             int definitionId = FenixDefinitionBase + index;
@@ -2026,6 +2135,7 @@ namespace SimpleSimConnector
             double? windSpeedMetersPerSecond = TelemetryMath.ValidateNumeric("windSpeedMetersPerSecond", weather.windSpeedKnots, TelemetryMath.KnotsToMetersPerSecond(weather.windSpeedKnots), rejected);
             double? windSpeedKnots = TelemetryMath.ValidateNumeric("windSpeedKnots", weather.windSpeedKnots, weather.windSpeedKnots, rejected);
             double? windDirectionDegrees = TelemetryMath.ValidateNumeric("windDirectionDegrees", weather.windDirectionDegrees, NormalizeHeading(weather.windDirectionDegrees), rejected);
+            double? cabinAltitudeMeters = TelemetryMath.ValidateNumeric("pressurization.cabinAltitudeMeters", core.cabinAltitudeMeters, ZeroNoise(core.cabinAltitudeMeters, 0.01), rejected);
 
             if (!outsideAirTemperatureCelsius.HasValue && TelemetryMath.IsFinite(weather.outsideAirTemperatureCelsius))
             {
@@ -2183,8 +2293,8 @@ namespace SimpleSimConnector
             double? autopilotVerticalSpeedHoldMetersPerSecond = useCustomAutopilotTelemetry
                 ? adapterResult.Autopilot.SelectedVerticalSpeedMetersPerSecond
                 : genericAutopilotVerticalSpeedHoldMetersPerSecond;
-            double? cabinAltitudeFeet = TelemetryMath.IsFinite(core.cabinAltitudeMeters)
-                ? TelemetryMath.MetersToFeet(core.cabinAltitudeMeters)
+            double? cabinAltitudeFeet = cabinAltitudeMeters.HasValue
+                ? TelemetryMath.MetersToFeet(cabinAltitudeMeters.Value)
                 : (double?)null;
             double? autopilotAirspeedHoldKnots = autopilotAirspeedHoldMetersPerSecond.HasValue
                 ? TelemetryMath.MetersPerSecondToKnots(autopilotAirspeedHoldMetersPerSecond.Value)
@@ -2300,7 +2410,7 @@ namespace SimpleSimConnector
             sb.Append("\"seaLevelPressurePascal\":").Append(Num(seaLevelPressurePascal)).Append(",");
             sb.Append("\"barometerSettingPascal\":").Append(Num(barometerSettingPascal)).Append(",");
             sb.Append("\"apu\":{\"status\":").Append(JsonStringOrNull(apuStatus)).Append(",\"source\":").Append(JsonStringOrNull(adapterResult.Apu != null ? adapterResult.Apu.Source : "generic-simvar")).Append("},");
-            sb.Append("\"pressurization\":{\"cabinAltitudeFeet\":").Append(Num(cabinAltitudeFeet)).Append(",\"cabinAltitudeMeters\":").Append(Num(core.cabinAltitudeMeters)).Append("},");
+            sb.Append("\"pressurization\":{\"cabinAltitudeFeet\":").Append(Num(cabinAltitudeFeet)).Append(",\"cabinAltitudeMeters\":").Append(Num(cabinAltitudeMeters)).Append("},");
             sb.Append("\"flightControls\":{\"yawDamperEnabled\":[").Append(JsonBoolOrNull(yawDamperEnabled)).Append("]},");
             sb.Append("\"autopilot\":{");
             sb.Append("\"source\":").Append(JsonStringOrNull(adapterResult.Autopilot != null ? adapterResult.Autopilot.Source : "generic-simvar")).Append(",");

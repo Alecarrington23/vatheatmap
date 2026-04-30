@@ -326,6 +326,11 @@ namespace SimpleSimConnector
 
     public static class TelemetryMath
     {
+        public static double ZeroNoise(double value, double threshold)
+        {
+            return IsFinite(value) && Math.Abs(value) < threshold ? 0 : value;
+        }
+
         public static double FeetToMeters(double feet)
         {
             return IsFinite(feet) ? feet * 0.3048 : feet;

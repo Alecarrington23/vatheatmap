@@ -110,6 +110,7 @@ namespace SimpleSimConnector
             new Pmdg737Adapter(),
             new IniBuildsA340Adapter(),
             new IniBuildsA350Adapter(),
+            new FlyByWireA380XAdapter(),
             new GenericAircraftAdapter()
         };
 
@@ -170,6 +171,14 @@ namespace SimpleSimConnector
                 return identity;
             }
 
+            if ((combined.Contains("FLYBYWIRE") || combined.Contains("FLYBYWIRE-AIRCRAFT-A380-842")) &&
+                (combined.Contains("A380") || combined.Contains("A388")))
+            {
+                identity.DetectedFamily = "FlyByWire A380X";
+                identity.DetectedVariant = detectedVariant ?? "A388";
+                return identity;
+            }
+
             identity.DetectedFamily = "Generic";
             identity.DetectedVariant = detectedVariant ?? "UNKNOWN";
             return identity;
@@ -208,6 +217,7 @@ namespace SimpleSimConnector
             if (upper.Contains("777F")) return "B77F";
             if (upper.Contains("A340") || upper.Contains("A346")) return "A340";
             if (upper.Contains("A350") || upper.Contains("A359")) return "A359";
+            if (upper.Contains("A380") || upper.Contains("A388")) return "A388";
             return null;
         }
 
@@ -342,6 +352,89 @@ namespace SimpleSimConnector
                 CandidateVariables = new List<string>(variables),
                 CandidateVariableSet = new HashSet<string>(variables, StringComparer.OrdinalIgnoreCase)
             };
+        }
+
+        public static FenixVariableDiscoveryResult DiscoverLvarsFromDirectory(string directoryPath, string[] keywords)
+        {
+            var variables = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+            {
+                return new FenixVariableDiscoveryResult
+                {
+                    CockpitBehaviorPath = Clean(directoryPath),
+                    CandidateVariables = new List<string>(),
+                    CandidateVariableSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                };
+            }
+
+            string[] files = Directory.GetFiles(directoryPath, "*.xml", SearchOption.AllDirectories);
+            for (int i = 0; i < files.Length; i++)
+            {
+                string content;
+                try
+                {
+                    content = File.ReadAllText(files[i]);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                ExtractLvars(content, keywords, variables);
+            }
+
+            return new FenixVariableDiscoveryResult
+            {
+                CockpitBehaviorPath = directoryPath,
+                CandidateVariables = new List<string>(variables),
+                CandidateVariableSet = new HashSet<string>(variables, StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        private static void ExtractLvars(string content, string[] keywords, SortedSet<string> variables)
+        {
+            int index = 0;
+
+            while (index >= 0 && index < content.Length)
+            {
+                index = content.IndexOf("L:", index, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                {
+                    break;
+                }
+
+                int start = index + 2;
+                int end = start;
+                while (end < content.Length)
+                {
+                    char current = content[end];
+                    if (!(char.IsLetterOrDigit(current) || current == '_' || current == ':' || current == '-'))
+                    {
+                        break;
+                    }
+
+                    end++;
+                }
+
+                string candidate = Clean(content.Substring(start, end - start).TrimEnd(','));
+                index = end;
+
+                if (candidate.Length == 0)
+                {
+                    continue;
+                }
+
+                string upper = candidate.ToUpperInvariant();
+                for (int i = 0; i < keywords.Length; i++)
+                {
+                    if (upper.Contains(keywords[i]))
+                    {
+                        variables.Add(candidate);
+                        break;
+                    }
+                }
+            }
         }
 
         private static string Clean(string value)
@@ -1897,6 +1990,334 @@ namespace SimpleSimConnector
             }
 
             return null;
+        }
+
+        private static bool AllKnownFalse(params bool?[] values)
+        {
+            bool sawKnown = false;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (!values[i].HasValue)
+                {
+                    continue;
+                }
+
+                sawKnown = true;
+                if (values[i].Value)
+                {
+                    return false;
+                }
+            }
+
+            return sawKnown;
+        }
+    }
+
+    public sealed class FlyByWireA380XAdapter : GenericAircraftAdapter
+    {
+        private static readonly string[] RequestedVariables =
+        {
+            "A32NX_APU_BLEED_AIR_VALVE_OPEN",
+            "A32NX_APU_N",
+            "A32NX_AUTOPILOT_1_ACTIVE",
+            "A32NX_AUTOPILOT_2_ACTIVE",
+            "A32NX_AUTOPILOT_FPA_SELECTED",
+            "A32NX_AUTOPILOT_HEADING_SELECTED",
+            "A32NX_AUTOPILOT_SPEED_SELECTED",
+            "A32NX_AUTOPILOT_VS_SELECTED",
+            "A32NX_AUTOTHRUST_STATUS",
+            "A32NX_FCU_ALT_MANAGED",
+            "A32NX_FCU_APPR_MODE_ACTIVE",
+            "A32NX_FCU_LOC_MODE_ACTIVE",
+            "A32NX_FCU_VS_MANAGED",
+            "A32NX_OVHD_APU_MASTER_SW_PB_IS_ON",
+            "A32NX_OVHD_APU_START_PB_IS_AVAILABLE",
+            "A32NX_OVHD_APU_START_PB_IS_ON",
+            "A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON",
+            "A32NX_SPEEDS_MANAGED_PFD",
+            "A32NX_TRK_FPA_MODE_ACTIVE"
+        };
+
+        private static readonly string[] DiscoveryKeywords =
+        {
+            "APU", "AUTOPILOT", "AUTOTHRUST", "FCU", "FD", "HEADING", "SPEED",
+            "VS", "FPA", "ALT", "MANAGED", "LOC", "APPR", "TRK", "BLEED"
+        };
+
+        public override string Name
+        {
+            get { return "FlyByWireA380XAdapter"; }
+        }
+
+        public override bool Matches(AircraftIdentityInfo identity)
+        {
+            return identity != null &&
+                string.Equals(identity.DetectedFamily, "FlyByWire A380X", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string[] GetDiscoveryKeywords()
+        {
+            return DiscoveryKeywords;
+        }
+
+        public static IList<string> GetRequestedVariables(ISet<string> discoveredVariables)
+        {
+            var requested = new List<string>();
+
+            for (int i = 0; i < RequestedVariables.Length; i++)
+            {
+                if (discoveredVariables != null && discoveredVariables.Contains(RequestedVariables[i]))
+                {
+                    requested.Add(RequestedVariables[i]);
+                }
+            }
+
+            return requested;
+        }
+
+        public override AircraftAdapterResult Evaluate(AircraftAdapterContext context)
+        {
+            GenericSystemsData generic = context != null && context.Generic != null
+                ? context.Generic
+                : new GenericSystemsData();
+
+            bool readable = context != null &&
+                context.CustomVariableValues != null &&
+                context.ReadableVariableCount > 0;
+
+            var result = new AircraftAdapterResult
+            {
+                AdapterName = Name,
+                Identity = context != null ? context.Identity : null,
+                FenixDetected = false,
+                FenixLvarSource = readable ? "direct-simconnect" : "unavailable",
+                FenixVariablesDiscovered = context != null ? context.DiscoveredVariableCount : 0,
+                FenixVariablesReadable = context != null ? context.ReadableVariableCount : 0
+            };
+
+            if (!readable)
+            {
+                result.Apu = new AdapterApuState
+                {
+                    Status = null,
+                    Source = "flybywire-a380x-lvar-unavailable",
+                    SelectionReason = "FlyByWire A380X detected but no readable custom LVars are available",
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                result.Autopilot = new AdapterAutopilotState
+                {
+                    Source = "flybywire-a380x-lvar-unavailable",
+                    SelectionReason = "FlyByWire A380X detected but no readable custom autoflight LVars are available",
+                    FlightDirectorEnabled = null,
+                    FlightDirector1Enabled = null,
+                    FlightDirector2Enabled = null,
+                    Ap1Engaged = null,
+                    Ap2Engaged = null,
+                    AutoThrottleArmed = null,
+                    AutoThrottleActive = null,
+                    SelectedSpeedMetersPerSecond = null,
+                    SelectedMach = null,
+                    SelectedHeadingDegrees = null,
+                    SelectedAltitudeMeters = null,
+                    SelectedVerticalSpeedMetersPerSecond = null,
+                    LateralMode = null,
+                    VerticalMode = null,
+                    ManagedSpeed = null,
+                    ManagedLateral = null,
+                    ManagedVertical = null,
+                    YawDamperEnabled = null,
+                    Modes = new List<string>(),
+                    RawValues = new Dictionary<string, double?>()
+                };
+
+                return result;
+            }
+
+            IReadOnlyDictionary<string, double?> values = context.CustomVariableValues;
+
+            bool? apuMaster = FirstKnownBoolean(values, "A32NX_OVHD_APU_MASTER_SW_PB_IS_ON");
+            bool? apuAvailable = FirstKnownBoolean(values, "A32NX_OVHD_APU_START_PB_IS_AVAILABLE");
+            bool? apuStart = FirstKnownBoolean(values, "A32NX_OVHD_APU_START_PB_IS_ON");
+            bool? apuBleedButton = FirstKnownBoolean(values, "A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON");
+            bool? apuBleedValve = FirstKnownBoolean(values, "A32NX_APU_BLEED_AIR_VALVE_OPEN");
+            double? apuN = FirstFinite(values, "A32NX_APU_N");
+
+            bool? apuBleed = null;
+            if (apuBleedButton == true || apuBleedValve == true)
+            {
+                apuBleed = true;
+            }
+            else if (apuBleedButton == false && apuBleedValve == false)
+            {
+                apuBleed = false;
+            }
+
+            string apuStatus;
+            if (apuBleed == true) apuStatus = "bleed_on";
+            else if (apuAvailable == true) apuStatus = "available";
+            else if (apuN.HasValue && apuN.Value >= 95.0) apuStatus = "running";
+            else if (apuStart == true || (apuN.HasValue && apuN.Value > 1.0)) apuStatus = "starting";
+            else if (apuMaster == true) apuStatus = "unknown";
+            else if (AllKnownFalse(apuMaster, apuAvailable, apuStart, apuBleedButton, apuBleedValve) && (!apuN.HasValue || apuN.Value <= 1.0)) apuStatus = "off";
+            else apuStatus = "unknown";
+
+            bool? ap1 = FirstKnownBoolean(values, "A32NX_AUTOPILOT_1_ACTIVE");
+            bool? ap2 = FirstKnownBoolean(values, "A32NX_AUTOPILOT_2_ACTIVE");
+            double? autoThrustStatus = FirstFinite(values, "A32NX_AUTOTHRUST_STATUS");
+            bool? autoThrottleArmed = autoThrustStatus.HasValue ? autoThrustStatus.Value > 0.0 : (bool?)null;
+            bool? autoThrottleActive = autoThrustStatus.HasValue ? (autoThrustStatus.Value >= 2.0) : (bool?)null;
+            bool? managedSpeed = FirstKnownBoolean(values, "A32NX_SPEEDS_MANAGED_PFD");
+            bool? managedVertical = FirstKnownBoolean(values, "A32NX_FCU_ALT_MANAGED", "A32NX_FCU_VS_MANAGED");
+            bool? locMode = FirstKnownBoolean(values, "A32NX_FCU_LOC_MODE_ACTIVE");
+            bool? apprMode = FirstKnownBoolean(values, "A32NX_FCU_APPR_MODE_ACTIVE");
+            bool? trkFpaMode = FirstKnownBoolean(values, "A32NX_TRK_FPA_MODE_ACTIVE");
+
+            double? selectedSpeedKnots = FirstFinite(values, "A32NX_AUTOPILOT_SPEED_SELECTED");
+            double? selectedHeading = FirstFinite(values, "A32NX_AUTOPILOT_HEADING_SELECTED");
+            double? selectedVsFeetPerMinute = FirstFinite(values, "A32NX_AUTOPILOT_VS_SELECTED");
+
+            bool? combinedFlightDirector = generic.FlightDirectorEnabled;
+            if (!combinedFlightDirector.HasValue && (ap1 == true || ap2 == true))
+            {
+                combinedFlightDirector = true;
+            }
+
+            string lateralMode = null;
+            if (apprMode == true) lateralMode = "APPR";
+            else if (locMode == true) lateralMode = "LOC";
+            else if (trkFpaMode == true) lateralMode = "TRK";
+
+            string verticalMode = null;
+            if (trkFpaMode == true) verticalMode = "FPA";
+            else if (managedVertical == true) verticalMode = "MANAGED";
+
+            var apuRaw = Collect(values,
+                "A32NX_OVHD_APU_MASTER_SW_PB_IS_ON",
+                "A32NX_OVHD_APU_START_PB_IS_AVAILABLE",
+                "A32NX_OVHD_APU_START_PB_IS_ON",
+                "A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON",
+                "A32NX_APU_BLEED_AIR_VALVE_OPEN",
+                "A32NX_APU_N");
+
+            var autopilotRaw = Collect(values,
+                "A32NX_AUTOPILOT_1_ACTIVE",
+                "A32NX_AUTOPILOT_2_ACTIVE",
+                "A32NX_AUTOTHRUST_STATUS",
+                "A32NX_AUTOPILOT_SPEED_SELECTED",
+                "A32NX_AUTOPILOT_HEADING_SELECTED",
+                "A32NX_AUTOPILOT_VS_SELECTED",
+                "A32NX_AUTOPILOT_FPA_SELECTED",
+                "A32NX_FCU_ALT_MANAGED",
+                "A32NX_FCU_VS_MANAGED",
+                "A32NX_SPEEDS_MANAGED_PFD",
+                "A32NX_FCU_LOC_MODE_ACTIVE",
+                "A32NX_FCU_APPR_MODE_ACTIVE",
+                "A32NX_TRK_FPA_MODE_ACTIVE");
+
+            result.Apu = new AdapterApuState
+            {
+                Status = apuStatus,
+                Source = "flybywire-a380x-lvar",
+                SelectionReason = "FlyByWire A380X adapter overrides generic APU SimVars",
+                RawValues = apuRaw
+            };
+
+            result.Autopilot = new AdapterAutopilotState
+            {
+                Source = "flybywire-a380x-lvar",
+                SelectionReason = "FlyByWire A380X adapter overrides generic autoflight state with readable custom LVars",
+                FlightDirectorEnabled = combinedFlightDirector,
+                FlightDirector1Enabled = null,
+                FlightDirector2Enabled = null,
+                Ap1Engaged = ap1,
+                Ap2Engaged = ap2,
+                AutoThrottleArmed = autoThrottleArmed,
+                AutoThrottleActive = autoThrottleActive,
+                SelectedSpeedMetersPerSecond = selectedSpeedKnots.HasValue ? TelemetryMath.KnotsToMetersPerSecond(selectedSpeedKnots.Value) : (double?)null,
+                SelectedMach = null,
+                SelectedHeadingDegrees = selectedHeading.HasValue ? NormalizeHeading(selectedHeading.Value) : (double?)null,
+                SelectedAltitudeMeters = generic.AltitudeHoldMeters,
+                SelectedVerticalSpeedMetersPerSecond = selectedVsFeetPerMinute.HasValue ? TelemetryMath.FeetPerMinuteToMetersPerSecond(selectedVsFeetPerMinute.Value) : (double?)null,
+                LateralMode = lateralMode,
+                VerticalMode = verticalMode,
+                ManagedSpeed = managedSpeed,
+                ManagedLateral = null,
+                ManagedVertical = managedVertical,
+                YawDamperEnabled = generic.YawDamperEnabled,
+                Modes = new List<string>(),
+                RawValues = autopilotRaw
+            };
+
+            return result;
+        }
+
+        private static IDictionary<string, double?> Collect(
+            IReadOnlyDictionary<string, double?> values,
+            params string[] names)
+        {
+            var collected = new Dictionary<string, double?>(StringComparer.OrdinalIgnoreCase);
+
+            if (values == null)
+            {
+                return collected;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value))
+                {
+                    collected[names[i]] = value;
+                }
+            }
+
+            return collected;
+        }
+
+        private static bool? FirstKnownBoolean(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            double? value = FirstFinite(values, names);
+            if (!value.HasValue)
+            {
+                return null;
+            }
+
+            return value.Value >= 0.5;
+        }
+
+        private static double? FirstFinite(IReadOnlyDictionary<string, double?> values, params string[] names)
+        {
+            if (values == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                double? value;
+                if (values.TryGetValue(names[i], out value) &&
+                    value.HasValue &&
+                    !double.IsNaN(value.Value) &&
+                    !double.IsInfinity(value.Value))
+                {
+                    return value.Value;
+                }
+            }
+
+            return null;
+        }
+
+        private static double NormalizeHeading(double degrees)
+        {
+            double value = degrees % 360.0;
+            if (value < 0.0)
+            {
+                value += 360.0;
+            }
+
+            return value;
         }
 
         private static bool AllKnownFalse(params bool?[] values)

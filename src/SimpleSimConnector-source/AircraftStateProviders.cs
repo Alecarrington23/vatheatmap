@@ -399,6 +399,26 @@ namespace SimpleSimConnector
         }
     }
 
+    public sealed class FlyByWireA380XProvider : LVarProviderBase
+    {
+        private static readonly FlyByWireA380XAdapter FbwAdapter = new FlyByWireA380XAdapter();
+
+        public FlyByWireA380XProvider(ProviderProfile profile)
+            : base(profile)
+        {
+        }
+
+        public override string Name
+        {
+            get { return "FlyByWireA380XProvider"; }
+        }
+
+        protected override IAircraftAdapter Adapter
+        {
+            get { return FbwAdapter; }
+        }
+    }
+
     public static class AircraftDetector
     {
         public static bool MatchesProfile(ProviderProfile profile, AircraftIdentityInfo identity)
@@ -459,6 +479,7 @@ namespace SimpleSimConnector
         private static readonly ProviderProfile IniBuildsAirbusProfile = ProfileFactory.CreateIniBuildsAirbusProfile();
         private static readonly ProviderProfile IniBuildsA340Profile = ProfileFactory.CreateIniBuildsVariantProfile("inibuilds-a340", "IniBuilds A340 Provider", "IniBuilds A340", "A340");
         private static readonly ProviderProfile IniBuildsA350Profile = ProfileFactory.CreateIniBuildsVariantProfile("inibuilds-a350", "IniBuilds A350 Provider", "IniBuilds A350", "A359");
+        private static readonly ProviderProfile FlyByWireA380XProfile = ProfileFactory.CreateFlyByWireA380XProfile();
 
         private static readonly IAircraftStateProvider[] Providers =
         {
@@ -467,6 +488,7 @@ namespace SimpleSimConnector
             new Pmdg737Provider(Pmdg737Profile),
             new IniBuildsA340Provider(IniBuildsA340Profile),
             new IniBuildsA350Provider(IniBuildsA350Profile),
+            new FlyByWireA380XProvider(FlyByWireA380XProfile),
             new GenericSimConnectProvider(GenericProfile)
         };
 
@@ -482,7 +504,8 @@ namespace SimpleSimConnector
                     Pmdg777Profile,
                     IniBuildsAirbusProfile,
                     IniBuildsA340Profile,
-                    IniBuildsA350Profile
+                    IniBuildsA350Profile,
+                    FlyByWireA380XProfile
                 };
             }
         }
@@ -859,12 +882,41 @@ namespace SimpleSimConnector
                 baseProfile.PrimarySourceKind,
                 new List<ProviderDetectionRule>
                 {
-                    new ProviderDetectionRule("DetectedFamily", family),
-                    new ProviderDetectionRule("DetectedVariant", variant)
+                    new ProviderDetectionRule("DetectedFamily", family)
                 },
                 new List<ProviderVariableProfile>(baseProfile.VariableProfiles),
                 new List<ProviderCapabilityDefinition>(baseProfile.CapabilityDefinitions),
                 new List<string>(baseProfile.UnsupportedFields));
+        }
+
+        public static ProviderProfile CreateFlyByWireA380XProfile()
+        {
+            return new ProviderProfile(
+                "flybywire-a380x",
+                "FlyByWire A380X",
+                AircraftProviderSourceKind.LVar,
+                new List<ProviderDetectionRule>
+                {
+                    new ProviderDetectionRule("DetectedFamily", "FlyByWire A380X"),
+                    new ProviderDetectionRule("PackagePath", "flybywire-aircraft-a380-842"),
+                    new ProviderDetectionRule("Title", "FlyByWire A380")
+                },
+                new List<ProviderVariableProfile>
+                {
+                    new ProviderVariableProfile("apu.status", "A32NX_OVHD_APU_MASTER_SW_PB_IS_ON, A32NX_OVHD_APU_START_PB_IS_AVAILABLE, A32NX_OVHD_APU_START_PB_IS_ON, A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON, A32NX_APU_BLEED_AIR_VALVE_OPEN, A32NX_APU_N", "lvar", "mixed", "derived", "FlyByWire A380X APU state derived from confirmed custom vars."),
+                    new ProviderVariableProfile("autopilot.ap1Engaged", "A32NX_AUTOPILOT_1_ACTIVE", "lvar", "bool", "identity", "FlyByWire A380X AP1 state."),
+                    new ProviderVariableProfile("autopilot.ap2Engaged", "A32NX_AUTOPILOT_2_ACTIVE", "lvar", "bool", "identity", "FlyByWire A380X AP2 state."),
+                    new ProviderVariableProfile("autopilot.autoThrottleArmed", "A32NX_AUTOTHRUST_STATUS", "lvar", "enum", "> 0 => armed", "FlyByWire A380X autothrust armed state."),
+                    new ProviderVariableProfile("autopilot.autoThrottleActive", "A32NX_AUTOTHRUST_STATUS", "lvar", "enum", ">= 2 => active", "FlyByWire A380X autothrust active state."),
+                    new ProviderVariableProfile("autopilot.selectedSpeedMetersPerSecond", "A32NX_AUTOPILOT_SPEED_SELECTED", "lvar", "knots", "knots * 0.514444", "FlyByWire A380X selected speed."),
+                    new ProviderVariableProfile("autopilot.selectedHeadingDegrees", "A32NX_AUTOPILOT_HEADING_SELECTED", "lvar", "degrees", "normalize heading", "FlyByWire A380X selected heading."),
+                    new ProviderVariableProfile("autopilot.selectedVerticalSpeedMetersPerSecond", "A32NX_AUTOPILOT_VS_SELECTED", "lvar", "feet/min", "feet/min * 0.00508", "FlyByWire A380X selected vertical speed."),
+                    new ProviderVariableProfile("autopilot.managedSpeed", "A32NX_SPEEDS_MANAGED_PFD", "lvar", "bool", "identity", "FlyByWire A380X managed speed indication."),
+                    new ProviderVariableProfile("autopilot.verticalMode", "A32NX_FCU_ALT_MANAGED, A32NX_FCU_VS_MANAGED, A32NX_TRK_FPA_MODE_ACTIVE", "lvar", "mixed", "derived", "FlyByWire A380X vertical mode hints."),
+                    new ProviderVariableProfile("autopilot.lateralMode", "A32NX_FCU_LOC_MODE_ACTIVE, A32NX_FCU_APPR_MODE_ACTIVE, A32NX_TRK_FPA_MODE_ACTIVE", "lvar", "mixed", "derived", "FlyByWire A380X lateral mode hints.")
+                },
+                CreateCommonCapabilities(),
+                new List<string>());
         }
 
         private static IList<ProviderCapabilityDefinition> CreateCommonCapabilities()
